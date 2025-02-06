@@ -6,6 +6,9 @@ from Activation import ActivationFunction
 class Layer:
     parameters: list
 
+    def __init__(self):
+        self.parameters = []
+
     def get_parameters(self):
         return self.parameters
 
@@ -28,14 +31,13 @@ class LinearLayer(Layer):
     n_neurons: int
     biased: bool
     activation: ActivationFunction
-    parameters: list
 
     def __init__(self, n_neurons, activation, biased=False):
+        super().__init__()
         self.n_neurons = n_neurons
         self.activation = activation
         self.biased = biased
         self.W = None
-        self.parameters = []
         return
 
     def initialize_weights(self, n_inputs):
@@ -58,18 +60,19 @@ class LinearLayer(Layer):
         return self.activation(X @ self.W)
 
     def __str__(self):
-        return f"Layer with n_neurons {self.n_neurons}, biased {self.biased}, activation {self.activation}."
+        return f"Layer with n_neurons {self.n_neurons}, " \
+               f"biased {self.biased}, " \
+               f"activation {self.activation}."
 
 
 class BatchNormLayer(Layer):
     gamma: Matrix
     beta: Matrix
-    parameters: list
 
     def __init__(self):
+        super().__init__()
         self.gamma = None
         self.beta = None
-        self.parameters = []
         return
 
     def initialize_weights(self):
@@ -95,25 +98,21 @@ class BatchNormLayer(Layer):
 
 class Conv2DLayer(LinearLayer):
     kernel_size: np.array([int, int])
-    n_channels: int
     dilation: np.array([int, int])
 
     def __init__(self, kernel_size, n_channels, activation, dilation=(1, 1), biased=False):
+        super().__init__(n_channels, activation, biased)
         self.kernel_size = kernel_size
-        self.n_channels = n_channels
         self.dilation = dilation
-        self.activation = activation
-        self.biased = biased
         self.W = None
-        self.parameters = []
         return
 
     def initialize_weights(self, n_inputs):
-        self.W = Matrix.normal(shape=(n_inputs, self.n_channels, self.kernel_size[0], self.kernel_size[1]),
+        self.W = Matrix.normal(shape=(n_inputs, self.n_neurons, self.kernel_size[0], self.kernel_size[1]),
                                require_grad=True)
         self.parameters = [self.W]
         if self.biased:
-            self.bias = Matrix.normal(shape=(self.n_channels),
+            self.bias = Matrix.normal(shape=(self.n_neurons),
                                       require_grad=True)
             self.parameters = [self.W, self.bias]
         return
@@ -127,7 +126,7 @@ class Conv2DLayer(LinearLayer):
             need to fix
             """
             WX = Matrix.conv2d(X, self.W, self.dilation)
-            for c in range(self.n_channels):
+            for c in range(self.n_neurons):
                 WX_bias = WX[:, c, :, :] + self.bias[c]
 
             return self.activation(WX_bias)
@@ -135,15 +134,77 @@ class Conv2DLayer(LinearLayer):
         return self.activation(Matrix.conv2d(X, self.W, self.dilation))
 
     def __str__(self):
-        return f"Convolutional layer with kernel {self.kernel_size}, channels {self.n_channels}, dilation {self.dilation}, biased {self.biased}, activation {self.activation}."
+        return f"Convolutional layer with kernel {self.kernel_size}, " \
+               f"channels {self.n_neurons}, " \
+               f"dilation {self.dilation}, " \
+               f"biased {self.biased}, " \
+               f"activation {self.activation}."
+
+
+class RNNLayer(Layer):
+    Wx: Matrix
+    Wh: Matrix
+    Wy: Matrix
+
+    bias_h: Matrix
+    bias_y: Matrix
+
+    n_inner_neurons: int
+    n_out_neurons: int
+    biased: bool
+    activation: ActivationFunction
+
+    def __init__(self, n_inner_neurons, n_out_neurons, activation, biased=False):
+        super().__init__()
+        self.n_inner_neurons = n_inner_neurons
+        self.n_out_neurons = n_out_neurons
+        self.activation = activation
+        self.biased = biased
+        self.Wx = None
+        self.Wh = None
+        self.Wy = None
+        return
+
+    def initialize_weights(self, n_inputs):
+        self.Wx = Matrix.normal(shape=(n_inputs, self.n_inner_neurons), require_grad=True)
+        self.Wh = Matrix.normal(shape=(self.n_inner_neurons, self.n_inner_neurons), require_grad=True)
+        self.Wy = Matrix.normal(shape=(self.n_inner_neurons, self.n_out_neurons), require_grad=True)
+        self.parameters = [self.Wx, self.Wh, self.Wy]
+
+        if self.biased:
+            self.bias_h = Matrix.normal(shape=(self.n_inner_neurons), require_grad=True)
+            self.bias_y = Matrix.normal(shape=(self.n_out_neurons), require_grad=True)
+            self.parameters = [self.Wx, self.Wh, self.Wy, self.bias_h, self.bias_y]
+
+    def forward(self, X):
+        if self.Wx is None:
+            self.initialize_weights(X.shape[1])
+
+        h0 = Matrix.zeros(shape=(X.shape[1]))
+        H = [h0]
+        Y = Matrix.zeros(shape=(X.shape[0], self.n_out_neurons))
+        for i in range(X.shape[0]):
+            if self.biased:
+                H.append(self.activation(X @ self.Wx + H[i] @ self.Wh + self.bias_h))
+                Y[i] = H[i + 1] @ self.Wy + self.bias_y
+            else:
+                H.append(self.activation(X @ self.Wx + H[i] @ self.Wh))
+                Y[i] = H[i + 1] @ self.Wy
+        return Y
+
+    def __str__(self):
+        return f"RNN Layer with n_inner_neurons {self.n_inner_neurons}, " \
+               f"n_out_neurons {self.n_out_neurons}, " \
+               f"biased {self.biased}, " \
+               f"activation {self.activation}."
 
 
 class FlattenLayer(Layer):
     input_shape: tuple
 
     def __init__(self):
+        super().__init__()
         self.biased = False
-        self.parameters = []
         return
 
     def forward(self, X):
