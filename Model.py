@@ -1,26 +1,28 @@
 import numpy as np
+from copy import copy
 from Matrix import *
 from Layers import *
 from Loss import *
 from Metric import *
 from Optimizers import *
+from DatasetIterators import *
 
 
 class model():
     layers: list[Layer]
     n_epochs: int
-    batch_size: int
+    dataset_it: DatasetIterator
     loss_fn: Loss
     metric_fn: Metric
-    optimizer: Optimizer
+    opimizer: Optimizer
     fit_error: np.array
     val_error: np.array
     parameters = []
 
-    def __init__(self, n_epochs, batch_size, loss_function, metric_function, optimizer):
+    def __init__(self, n_epochs, dataset_iterator, loss_function, metric_function, optimizer):
         self.layers = []
         self.n_epochs = n_epochs
-        self.batch_size = batch_size
+        self.dataset_it = dataset_iterator
         self.loss_fn = loss_function
         self.metric_fn = metric_function
         self.optimizer = optimizer
@@ -39,16 +41,6 @@ class model():
             self.parameters += layer.get_parameters()
         return current_input
 
-    def batch(self, X, y, iteration):
-
-        if (iteration + 1) * self.batch_size > X.shape[0] - 1:
-            batch_slice = slice(iteration * self.batch_size, X.shape[0] - 1)
-        else:
-            batch_slice = slice(iteration * self.batch_size, (iteration + 1) * self.batch_size)
-        X_batch = X[batch_slice][:]
-        y_batch = y[batch_slice]
-        return X_batch, y_batch
-
     def zero_grad(self):
         for parameter in self.parameters:
             parameter.local_gradients = []
@@ -56,13 +48,17 @@ class model():
 
     def fit(self, X, y, X_val=None, y_val=None):
 
-        X = Matrix(X)
-        y = Matrix(y)
-
-        n_batches_train = int(np.ceil(X.shape[0] // self.batch_size))
-
+        train_dataset_iterator = copy(self.dataset_it)
+        train_dataset_iterator.fill(X, y)
+        n_batches_train = train_dataset_iterator.n_batches
         self.fit_error = np.zeros((self.n_epochs))
+
+        val_dataset_iterator = None
+        n_batches_val = 0
         if (X_val is not None) and (y_val is not None):
+            val_dataset_iterator = copy(self.dataset_it)
+            val_dataset_iterator.fill(X_val, y_val)
+            n_batches_val = val_dataset_iterator.n_batches
             self.val_error = np.zeros((self.n_epochs))
 
         for epoch in range(self.n_epochs):
@@ -70,9 +66,8 @@ class model():
             sum_loss_train = 0
             sum_metric_train = 0
 
-            for it in range(n_batches_train):
+            for (X_batch, y_batch) in train_dataset_iterator():
                 self.zero_grad()
-                X_batch, y_batch = self.batch(X, y, it)
                 y_pred = self.forward(X_batch)
 
                 loss = self.loss_fn(y_batch, y_pred)
@@ -93,17 +88,11 @@ class model():
 
             if (X_val is not None) and (y_val is not None):
 
-                X_val = Matrix(X_val)
-                y_val = Matrix(y_val)
-
-                n_batches_val = int(np.ceil(X_val.shape[0] // self.batch_size))
-
                 sum_loss_val = 0
                 sum_metric_val = 0
 
-                for it in range(n_batches_val):
+                for (X_batch, y_batch) in val_dataset_iterator():
                     self.zero_grad()
-                    X_batch, y_batch = self.batch(X, y, it)
                     y_pred = self.forward(X_batch)
 
                     loss = self.loss_fn(y_batch, y_pred)
