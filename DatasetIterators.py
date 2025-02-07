@@ -19,7 +19,7 @@ class DatasetIterator:
         return new_iterator
 
     def fill(self, X, y):
-        self.dataset.fill(Matrix(X), Matrix(y))
+        self.dataset.fill(X, y)
         self.n_batches = int(np.ceil(len(self.dataset) / self.batch_size))
         return self
 
@@ -40,7 +40,7 @@ class DatasetIterator:
 class SequenceIterator(DatasetIterator):
 
     def fill(self, X, y):
-        self.dataset.fill(Matrix(X), Matrix(y))
+        self.dataset.fill(X, y)
         self.n_batches = len(self.dataset) - self.batch_size + 1
         return self
 

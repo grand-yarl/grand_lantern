@@ -1,11 +1,12 @@
 import numpy as np
+from copy import copy
 from collections import defaultdict
 
 
 class Matrix:
 
     value: np.array
-    local_gradients: dict
+    local_gradients: list
     require_grad: bool
     shape: tuple
 
@@ -421,9 +422,7 @@ class Matrix:
             if matrix.local_gradients:
                 for (child, child_gradients_func, operation) in matrix.local_gradients:
                     new_child_grad = child_gradients_func(before_grads)
-
                     compute_gradients(child, new_child_grad)
-
                     gradients[child] += new_child_grad
 
         compute_gradients(self, np.ones(self.shape))
@@ -432,6 +431,16 @@ class Matrix:
 
     def __getitem__(self, idx):
         return Matrix(self.value[idx])
+
+    def __setitem__(self, key, item):
+        if isinstance(item, Matrix):
+            self.value[key] = item.value
+            if item.require_grad:
+                self.require_grad = True
+                self.local_gradients.append((item, lambda x: x[key].reshape(1, -1), 'setitem'))
+        else:
+            self.value = np.array(item)
+        return
 
     def __repr__(self):
         return f"{self.value}"

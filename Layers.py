@@ -172,23 +172,25 @@ class RNNLayer(Layer):
         self.parameters = [self.Wx, self.Wh, self.Wy]
 
         if self.biased:
-            self.bias_h = Matrix.normal(shape=(self.n_inner_neurons), require_grad=True)
-            self.bias_y = Matrix.normal(shape=(self.n_out_neurons), require_grad=True)
+            self.bias_h = Matrix.normal(shape=(1, self.n_inner_neurons), require_grad=True)
+            self.bias_y = Matrix.normal(shape=(1, self.n_out_neurons), require_grad=True)
             self.parameters = [self.Wx, self.Wh, self.Wy, self.bias_h, self.bias_y]
 
     def forward(self, X):
         if self.Wx is None:
             self.initialize_weights(X.shape[1])
 
-        h0 = Matrix.zeros(shape=(X.shape[1]))
+        h0 = Matrix.zeros(shape=(1, self.n_inner_neurons))
         H = [h0]
         Y = Matrix.zeros(shape=(X.shape[0], self.n_out_neurons))
         for i in range(X.shape[0]):
             if self.biased:
-                H.append(self.activation(X @ self.Wx + H[i] @ self.Wh + self.bias_h))
+                Xi = X[i].reshape(shape=(1, -1))
+                H.append(self.activation(Xi @ self.Wx + H[i] @ self.Wh + self.bias_h))
                 Y[i] = H[i + 1] @ self.Wy + self.bias_y
             else:
-                H.append(self.activation(X @ self.Wx + H[i] @ self.Wh))
+                Xi = X[i].reshape(shape=(1, -1))
+                H.append(self.activation(Xi @ self.Wx + H[i] @ self.Wh))
                 Y[i] = H[i + 1] @ self.Wy
         return Y
 
