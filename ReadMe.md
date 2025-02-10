@@ -9,7 +9,7 @@ This library is written only using numpy (maybe cupy in future), you can see eve
 Put just this command to terminal
 
 ```commandline
-pip install grandlantern
+pip install grand_lantern
 ```
 
 ## Get started 🚀
