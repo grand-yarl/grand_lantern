@@ -1,5 +1,4 @@
-import numpy as np
-from Matrix import *
+from grand_lantern.matrix.Matrix import *
 
 
 class Optimizer:
@@ -23,7 +22,7 @@ class SGD(Optimizer):
 
 class NAD(SGD):
     inertia_moment: float
-    last_gradients: float
+    last_gradients: dict
 
     def __init__(self, learning_rate, inertia_moment):
         super().__init__(learning_rate)

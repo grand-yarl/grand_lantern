@@ -1,6 +1,5 @@
-import numpy as np
-from Matrix import *
-from Activation import ActivationFunction
+from grand_lantern.matrix.Matrix import *
+from grand_lantern.layers.Activation import ActivationFunction
 
 
 class Layer:

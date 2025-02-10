@@ -1,5 +1,4 @@
-import numpy as np
-from Matrix import *
+from grand_lantern.matrix.Matrix import *
 
 
 class Metric:
@@ -25,8 +24,19 @@ class Accuracy(Metric):
 class MSEMetric(Metric):
 
     def __call__(self, y_true, y_pred):
-        summ = np.sum((y_pred.value - y_true.value) ** 2)
+        summ = np.sum((y_true.value - y_pred.value) ** 2)
         return 1 / len(y_true.value) * summ
 
     def __str__(self):
         return f"MSE"
+
+
+class R2(Metric):
+
+    def __call__(self, y_true, y_pred):
+        ss_res = np.sum((y_true.value - y_pred.value) ** 2)
+        ss_tot = np.sum((y_true.value - np.mean(y_true.value)) ** 2)
+        return 1 - ss_res / ss_tot
+
+    def __str__(self):
+        return f"R2"

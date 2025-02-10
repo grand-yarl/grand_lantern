@@ -1,4 +1,4 @@
-from Matrix import *
+from grand_lantern.matrix.Matrix import *
 
 
 class Loss:
