@@ -6,10 +6,10 @@ This library is written only using numpy (maybe cupy in future), you can see eve
 
 ## How to install ⛏️
 
-Put just this command to terminal
+Just put this command to terminal
 
 ```commandline
-pip install grand_lantern
+pip install grandlantern
 ```
 
 ## Get started 🚀
@@ -17,16 +17,16 @@ pip install grand_lantern
 ### 1. Import library
 
 ```python
-import grandlantern as gl
+import grandlantern
 ```
 
 ### 2. Define Data Iterator
 
 ```python
-from grandlantern.dataiterators import DatasetIterator
+from grandlantern.dataiterators import DatasetIterator, TableDataset
 
 batch_size = 100
-my_dataset_iterator = DatasetIterator(dataset=gl.TableDataset(), batch_size=batch_size)
+my_dataset_iterator = DatasetIterator(dataset=TableDataset(), batch_size=batch_size)
 ```
 
 ### 3. Choose optimizer
@@ -61,13 +61,37 @@ NN.add_layer(LinearLayer(n_neurons=50, activation=ReLU(), biased=True))
 NN.add_layer(LinearLayer(n_neurons=10, activation=SoftMax(), biased=True))
 ```
 
+Also layers can be added using attribute model.layers:
+```python
+from grandlantern.layers import LinearLayer
+from grandlantern.layers.Activation import Sigmoid, ReLU, SoftMax
+
+NN.layers = 
+[
+    LinearLayer(n_neurons=100, activation=Sigmoid(), biased=True),
+    LinearLayer(n_neurons=50, activation=ReLU(), biased=True)
+    LinearLayer(n_neurons=10, activation=SoftMax(), biased=True)
+]
+```
+
+To look at the model structure the command print can be used:
+```python
+print(NN)
+```
+
+
 ### 6. Train model
+
+Inputs for training must be numpy arrays. There is also option to validate model on test data while training 
+(X_test and y_test are optional).
 
 ```python
 NN.fit(X_train, y_train.reshape(-1, 1), X_test, y_test.reshape(-1, 1))
 ```
 
 ### 7. Use model
+
+Input for prediction must be numpy array.
 
 ```python
 y_pred = NN.predict(X_test)
@@ -77,7 +101,7 @@ y_pred = NN.predict(X_test)
 
 ### Layers
 
-* Linear Layer
+* Linear Layer (LinearLayer)
 * Image Convolutional Layer (Conv2DLayer)
 * Batch Normalization Layer (BatchNormLayer)
 * RNN Layer (RNNLayer)
