@@ -1,7 +1,10 @@
-from grand_lantern.layers.Layers import *
-from grand_lantern.metrics import *
-from grand_lantern.optimizers import *
-from grand_lantern.dataiterators.DatasetIterators import *
+import numpy as np
+from copy import copy
+from .matrix import Matrix
+from .layers import Layer
+from .metrics import Metric, Loss
+from .optimizers import Optimizer
+from .dataiterators import DatasetIterator
 
 
 class model():

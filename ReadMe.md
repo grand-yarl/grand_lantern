@@ -15,43 +15,46 @@ pip install grand_lantern
 ## Get started 🚀
 
 ### 1. Import library
+
 ```python
-import grand_lantern as gl
+import grandlantern as gl
 ```
 
 ### 2. Define Data Iterator
+
 ```python
-from grand_lantern.dataiterators import DatasetIterator
+from grandlantern.dataiterators import DatasetIterator
 
 batch_size = 100
-my_dataset_iterator = DatasetIterator(dataset = gl.TableDataset(), batch_size = batch_size)
+my_dataset_iterator = DatasetIterator(dataset=gl.TableDataset(), batch_size=batch_size)
 ```
 
 ### 3. Choose optimizer
-```python
-from grand_lantern.optimizers import SGD
 
-my_optimizer = SGD(learning_rate = 0.01)
+```python
+from grandlantern.optimizers import SGD
+
+my_optimizer = SGD(learning_rate=0.01)
 ```
 
 ### 4. Build model
 
 ```python
-from grand_lantern import model
-from grand_lantern.metrics import CrossEntropy, Accuracy
+from grandlantern import model
+from grandlantern.metrics import CrossEntropy, Accuracy
 
 NN = model(n_epochs=100,
-           dataset_iterator = my_dataset_iterator,
-           loss_function = CrossEntropy(),
-           metric_function = Accuracy(),
-           optimizer = my_optimizer)
+           dataset_iterator=my_dataset_iterator,
+           loss_function=CrossEntropy(),
+           metric_function=Accuracy(),
+           optimizer=my_optimizer)
 ```
 
 ### 5. Add layers
 
 ```python
-from grand_lantern.layers import LinearLayer
-from grand_lantern.layers.Activation import Sigmoid, ReLU, SoftMax
+from grandlantern.layers import LinearLayer
+from grandlantern.layers.Activation import Sigmoid, ReLU, SoftMax
 
 NN.add_layer(LinearLayer(n_neurons=100, activation=Sigmoid(), biased=True))
 NN.add_layer(LinearLayer(n_neurons=50, activation=ReLU(), biased=True))

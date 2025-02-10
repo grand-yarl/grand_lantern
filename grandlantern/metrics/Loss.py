@@ -1,4 +1,5 @@
-from grand_lantern.matrix.Matrix import *
+import numpy as np
+from grandlantern.matrix.Matrix import Matrix
 
 
 class Loss:

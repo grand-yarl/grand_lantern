@@ -1,4 +1,5 @@
-from grand_lantern.matrix.Matrix import *
+from grandlantern.matrix.Matrix import Matrix
+import numpy as np
 
 
 class Optimizer:

@@ -1,4 +1,5 @@
-from Datasets import *
+import numpy as np
+from .Datasets import *
 from copy import copy
 
 
