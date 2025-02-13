@@ -9,6 +9,7 @@ class Matrix:
     local_gradients: list
     require_grad: bool
     shape: tuple
+    ndim: int
 
     def __init__(self, array, local_gradients=None, require_grad=False):
         if local_gradients is None:
@@ -20,12 +21,13 @@ class Matrix:
             self.value = np.array(array)
             self.local_gradients = local_gradients
         self.shape = self.value.shape
+        self.ndim = self.value.ndim
         self.require_grad = require_grad
 
     def __add__(self, other):
 
         def compute_gradient(grad, target):
-            while np.prod(grad.shape) > np.prod(target.shape):
+            while np.prod(grad.shape) > np.prod(target.shape) or (grad.ndim > target.ndim):
                 grad = np.sum(grad, axis=0)
             return grad
 
@@ -44,7 +46,7 @@ class Matrix:
 
     def __sub__(self, other):
         def compute_gradient(grad, target):
-            while np.prod(grad.shape) > np.prod(target.shape):
+            while np.prod(grad.shape) > np.prod(target.shape) or (grad.ndim > target.ndim):
                 grad = np.sum(grad, axis=0)
             return grad
 
@@ -63,7 +65,7 @@ class Matrix:
 
     def __mul__(self, other):
         def compute_gradient(grad, target):
-            while np.prod(grad.shape) > np.prod(target.shape):
+            while np.prod(grad.shape) > np.prod(target.shape) or (grad.ndim > target.ndim):
                 grad = np.sum(grad, axis=0)
             return grad
 
@@ -82,7 +84,7 @@ class Matrix:
 
     def __truediv__(self, other):
         def compute_gradient(grad, target):
-            while np.prod(grad.shape) > np.prod(target.shape):
+            while np.prod(grad.shape) > np.prod(target.shape) or (grad.ndim > target.ndim):
                 grad = np.sum(grad, axis=0)
             return grad
 
@@ -130,6 +132,11 @@ class Matrix:
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     def __matmul__(self, other):
+        def compute_gradient(grad, target):
+            while np.prod(grad.shape) > np.prod(target.shape) or (grad.ndim > target.ndim):
+                grad = np.sum(grad, axis=0)
+            return grad
+
         if not isinstance(other, Matrix):
             other = Matrix(other)
 
@@ -138,10 +145,19 @@ class Matrix:
         new_require_grad = self.require_grad or other.require_grad
 
         if self.require_grad:
-            new_local_gradients.append((self, lambda x: x @ np.moveaxis(other.value, -1, -2), 'matmul'))
+            new_local_gradients.append((self,
+                                        lambda x: compute_gradient(x @ np.moveaxis(other.value, -1, -2), self),
+                                        'matmul'))
         if other.require_grad:
-            new_local_gradients.append((other, lambda x: np.moveaxis(self.value, -1, -2) @ x, 'matmul'))
+            new_local_gradients.append((other,
+                                        lambda x: compute_gradient(np.moveaxis(self.value, -1, -2) @ x, other),
+                                        'matmul'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
+
+    def __rmatmul__(self, other):
+        if not isinstance(other, Matrix):
+            other = Matrix(other)
+        return other @ self
 
     def __pow__(self, power):
         new_value = self.value ** power
