@@ -138,9 +138,9 @@ class Matrix:
         new_require_grad = self.require_grad or other.require_grad
 
         if self.require_grad:
-            new_local_gradients.append((self, lambda x: x @ other.value.T, 'matmul'))
+            new_local_gradients.append((self, lambda x: x @ np.moveaxis(other.value, -1, -2), 'matmul'))
         if other.require_grad:
-            new_local_gradients.append((other, lambda x: self.value.T @ x, 'matmul'))
+            new_local_gradients.append((other, lambda x: np.moveaxis(self.value, -1, -2) @ x, 'matmul'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     def __pow__(self, power):
