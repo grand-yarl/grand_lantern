@@ -1,6 +1,6 @@
 import numpy as np
 from grandlantern.matrix.Matrix import Matrix
-from .Activation import ActivationFunction
+from .Activation import ActivationFunction, Linear
 
 
 class Layer:
@@ -52,7 +52,7 @@ class LinearLayer(Layer):
 
     def forward(self, X):
         if self.W is None:
-            self.initialize_weights(X.shape[1])
+            self.initialize_weights(X.shape[-1])
 
         if self.biased:
             return self.activation(X @ self.W + self.bias)
@@ -60,7 +60,7 @@ class LinearLayer(Layer):
         return self.activation(X @ self.W)
 
     def __str__(self):
-        return f"Layer with n_neurons {self.n_neurons}, " \
+        return f"Linear Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
                f"activation {self.activation}."
 
@@ -141,14 +141,52 @@ class Conv2DLayer(LinearLayer):
                f"activation {self.activation}."
 
 
-class RNNLayer(Layer):
+class RecursiveLayer(Layer):
     Wx: Matrix
     Wh: Matrix
-    Wy: Matrix
+    bias: Matrix
+    biased: bool
+    activation: ActivationFunction
 
-    bias_h: Matrix
-    bias_y: Matrix
+    def __init__(self, n_neurons, activation, biased=False):
+        super().__init__()
+        self.n_neurons = n_neurons
+        self.activation = activation
+        self.biased = biased
+        self.Wx = None
+        self.Wh = None
+        return
 
+    def initialize_weights(self, n_inputs):
+        self.Wx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.parameters = [self.Wx, self.Wh]
+
+        if self.biased:
+            self.bias = Matrix.normal(shape=(1, self.n_neurons), require_grad=True)
+            self.parameters = [self.Wx, self.Wh, self.bias]
+
+    def forward(self, X):
+        if self.Wx is None:
+            self.initialize_weights(X.shape[2])
+
+        H = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+
+        for i in range(X.shape[1]):
+            if self.biased:
+                H[:, i + 1] = self.activation(X[:, i] @ self.Wx + H[:, i] @ self.Wh + self.bias)
+            else:
+                H[:, i + 1] = self.activation(X[:, i] @ self.Wx + H[:, i] @ self.Wh)
+        return H[:, 1:]
+
+    def __str__(self):
+        return f"Recursive Layer with n_neurons {self.n_neurons}, " \
+               f"biased {self.biased}, " \
+               f"activation {self.activation}."
+
+
+class RNNLayer(Layer):
+    layers: list[Layer]
     n_inner_neurons: int
     n_out_neurons: int
     biased: bool
@@ -160,39 +198,19 @@ class RNNLayer(Layer):
         self.n_out_neurons = n_out_neurons
         self.activation = activation
         self.biased = biased
-        self.Wx = None
-        self.Wh = None
-        self.Wy = None
+        self.layers = [
+            RecursiveLayer(self.n_inner_neurons, self.activation, self.biased),
+            LinearLayer(self.n_out_neurons, Linear(), self.biased)
+        ]
         return
 
-    def initialize_weights(self, n_inputs):
-        self.Wx = Matrix.normal(shape=(n_inputs, self.n_inner_neurons), require_grad=True)
-        self.Wh = Matrix.normal(shape=(self.n_inner_neurons, self.n_inner_neurons), require_grad=True)
-        self.Wy = Matrix.normal(shape=(self.n_inner_neurons, self.n_out_neurons), require_grad=True)
-        self.parameters = [self.Wx, self.Wh, self.Wy]
-
-        if self.biased:
-            self.bias_h = Matrix.normal(shape=(1, self.n_inner_neurons), require_grad=True)
-            self.bias_y = Matrix.normal(shape=(1, self.n_out_neurons), require_grad=True)
-            self.parameters = [self.Wx, self.Wh, self.Wy, self.bias_h, self.bias_y]
-
     def forward(self, X):
-        if self.Wx is None:
-            self.initialize_weights(X.shape[1])
-
-        h0 = Matrix.zeros(shape=(1, self.n_inner_neurons))
-        H = [h0]
-        Y = Matrix.zeros(shape=(X.shape[0], self.n_out_neurons))
-        for i in range(X.shape[0]):
-            if self.biased:
-                Xi = X[i].reshape(shape=(1, -1))
-                H.append(self.activation(Xi @ self.Wx + H[i] @ self.Wh + self.bias_h))
-                Y[i] = H[i + 1] @ self.Wy + self.bias_y
-            else:
-                Xi = X[i].reshape(shape=(1, -1))
-                H.append(self.activation(Xi @ self.Wx + H[i] @ self.Wh))
-                Y[i] = H[i + 1] @ self.Wy
-        return Y
+        current = X
+        self.parameters = []
+        for layer in self.layers:
+            current = layer.forward(current)
+            self.parameters += layer.get_parameters()
+        return current
 
     def __str__(self):
         return f"RNN Layer with n_inner_neurons {self.n_inner_neurons}, " \

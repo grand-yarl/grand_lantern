@@ -1,13 +1,17 @@
 import numpy as np
 from grandlantern.matrix.Matrix import Matrix
+from copy import copy
 
 
-class Dataset():
+class Dataset:
 
     def __init__(self):
         return
 
     def fill(self, X, y):
+        pass
+
+    def shuffle(self):
         pass
 
     def __len__(self):
@@ -32,6 +36,11 @@ class TableDataset(Dataset):
         self.y = Matrix(y)
         return self
 
+    def shuffle(self):
+        indexes = np.random.shuffle(np.arange(len(self)))
+        self.X = Matrix(self.X.value[indexes][0])
+        self.y = Matrix(self.y.value[indexes][0])
+
     def __len__(self):
         return self.X.shape[0]
 
@@ -39,9 +48,7 @@ class TableDataset(Dataset):
         return self.X[idx], self.y[idx]
 
 
-class ImageDataset(Dataset):
-    X: Matrix
-    y: Matrix
+class ImageDataset(TableDataset):
 
     def __init__(self):
         super().__init__()
@@ -61,3 +68,22 @@ class ImageDataset(Dataset):
 
     def __getitem__(self, idx):
         return self.X[idx], self.y[idx]
+
+
+class SequenceDataset(TableDataset):
+    seq_len: int
+
+    def __init__(self, seq_len):
+        super().__init__()
+        self.seq_len = seq_len
+
+    def fill(self, X, y):
+        n_seq = X.shape[0] - self.seq_len + 1
+        X_seq = np.zeros((n_seq, self.seq_len, X.shape[1]))
+        y_seq = np.zeros((n_seq, self.seq_len, y.shape[1]))
+        for i in range(n_seq):
+            X_seq[i] = copy(X[i: i + self.seq_len])
+            y_seq[i] = copy(y[i: i + self.seq_len])
+        self.X = Matrix(X_seq)
+        self.y = Matrix(y_seq)
+        return self

@@ -7,11 +7,13 @@ class DatasetIterator:
     dataset: Dataset
     batch_size: int
     n_batches: int
+    shuffle: bool
 
-    def __init__(self, dataset, batch_size):
+    def __init__(self, dataset, batch_size, shuffle=True):
         self.dataset = dataset
         self.batch_size = batch_size
         self.n_batches = 0
+        self.shuffle = shuffle
 
     def __copy__(self):
         cls = self.__class__
@@ -33,19 +35,8 @@ class DatasetIterator:
         return X_batch, y_batch
 
     def __call__(self):
+        if self.shuffle:
+            self.dataset.shuffle()
         for it in range(self.n_batches):
             X_batch, y_batch = self.batch(it)
             yield X_batch, y_batch
-
-
-class SequenceIterator(DatasetIterator):
-
-    def fill(self, X, y):
-        self.dataset.fill(X, y)
-        self.n_batches = len(self.dataset) - self.batch_size + 1
-        return self
-
-    def batch(self, iteration):
-        batch_slice = slice(iteration, iteration + self.batch_size)
-        X_batch, y_batch = self.dataset[batch_slice]
-        return X_batch, y_batch

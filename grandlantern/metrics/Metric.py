@@ -25,8 +25,7 @@ class Accuracy(Metric):
 class MSEMetric(Metric):
 
     def __call__(self, y_true, y_pred):
-        summ = np.sum((y_true.value - y_pred.value) ** 2)
-        return 1 / len(y_true.value) * summ
+        return np.mean((y_true.value - y_pred.value) ** 2)
 
     def __str__(self):
         return f"MSE"
