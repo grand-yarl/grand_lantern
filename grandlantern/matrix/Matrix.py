@@ -184,6 +184,11 @@ class Matrix:
         return Matrix(new_value, require_grad=require_grad)
 
     @classmethod
+    def ones(cls, shape, require_grad=False):
+        new_value = np.ones(shape)
+        return Matrix(new_value, require_grad=require_grad)
+
+    @classmethod
     def normal(cls, shape, mean=0, std=1, require_grad=False):
         new_value = np.random.normal(loc=mean, scale=std, size=shape)
         return Matrix(new_value, require_grad=require_grad)
@@ -245,7 +250,7 @@ class Matrix:
 
     @classmethod
     def sum(cls, obj, axis=None, keepdims=False):
-        if not keepdims:  # Не хотим сохранить размерность
+        if not keepdims:
             if axis is not None:
                 new_value = np.sum(obj.value, axis=axis)
                 new_local_gradients = []
@@ -268,7 +273,7 @@ class Matrix:
                     )
                 return Matrix(new_value, new_local_gradients, new_require_grad)
 
-        else:  # Хотим сохранить размерность
+        else:
             new_value = np.sum(obj.value, axis=axis, keepdims=True) * np.ones_like(obj.value)
             new_local_gradients = []
             new_require_grad = obj.require_grad
@@ -283,7 +288,7 @@ class Matrix:
     def mean(cls, obj, axis=None, keepdims=False):
         if not keepdims:
             if axis is not None:
-                new_value = np.sum(obj.value, axis=axis)
+                new_value = np.mean(obj.value, axis=axis)
                 new_local_gradients = []
                 new_require_grad = obj.require_grad
 
@@ -345,7 +350,8 @@ class Matrix:
     @classmethod
     def sign(cls, obj):
         new_value = np.sign(obj.value)
-        return Matrix(new_value)
+        new_require_grad = obj.require_grad
+        return Matrix(new_value, require_grad=new_require_grad)
 
     @classmethod
     def tanh(cls, obj):

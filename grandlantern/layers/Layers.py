@@ -75,20 +75,20 @@ class BatchNormLayer(Layer):
         self.beta = None
         return
 
-    def initialize_weights(self):
-        self.gamma = Matrix(1., require_grad=True)
-        self.beta = Matrix(0., require_grad=True)
+    def initialize_weights(self, n_inputs):
+        self.gamma = Matrix.ones(shape=(n_inputs), require_grad=True)
+        self.beta = Matrix.zeros(shape=(n_inputs), require_grad=True)
         self.parameters = [self.gamma, self.beta]
         return
 
     def forward(self, X):
         if (self.gamma is None) or (self.beta is None):
-            self.initialize_weights()
+            self.initialize_weights(X.shape[1:])
 
         mean = Matrix.mean(X, axis=0, keepdims=True)
         std = Matrix.std(X, axis=0, keepdims=True)
 
-        X_normed = (X - mean) / (std ** 2 + 10e-3)
+        X_normed = (X - mean) / (std ** 2 + 10e-5)
 
         return X_normed * self.gamma + self.beta
 
