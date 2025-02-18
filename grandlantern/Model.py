@@ -5,6 +5,7 @@ from .layers import Layer
 from .metrics import Metric, Loss
 from .optimizers import Optimizer
 from .dataiterators import DatasetIterator
+from .layers import BaseRegularizer
 
 
 class model():
@@ -16,7 +17,8 @@ class model():
     opimizer: Optimizer
     fit_error: np.array
     val_error: np.array
-    parameters = []
+    parameters: list[Matrix]
+    regularizators: list[BaseRegularizer]
 
     def __init__(self, n_epochs, dataset_iterator, loss_function, metric_function, optimizer):
         self.layers = []
@@ -26,6 +28,7 @@ class model():
         self.metric_fn = metric_function
         self.optimizer = optimizer
         self.parameters = []
+        self.regularizators = []
         return
 
     def add_layer(self, layer):
@@ -34,10 +37,12 @@ class model():
 
     def forward(self, input_model):
         self.parameters = []
+        self.regularizators = []
         current_input = input_model
         for layer in self.layers:
             current_input = layer.forward(current_input)
             self.parameters += layer.get_parameters()
+            self.regularizators.append(layer.get_regularizer())
         return current_input
 
     def zero_grad(self):
@@ -70,10 +75,13 @@ class model():
                 y_pred = self.forward(X_batch)
 
                 loss = self.loss_fn(y_batch, y_pred)
-                metric = self.metric_fn(y_batch, y_pred)
+                for regularizator in self.regularizators:
+                    loss += regularizator()
                 gradients = loss.backward()
                 self.optimizer.optimize(self.parameters, gradients)
                 # print(Matrix.mean(loss))
+
+                metric = self.metric_fn(y_batch, y_pred)
 
                 sum_loss_train += np.mean(loss.value)
                 sum_metric_train += metric

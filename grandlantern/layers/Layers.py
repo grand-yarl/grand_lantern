@@ -1,16 +1,22 @@
 import numpy as np
 from grandlantern.matrix.Matrix import Matrix
 from .Activation import ActivationFunction, Linear
+from .Regularizers import BaseRegularizer
 
 
 class Layer:
     parameters: list
+    regularizer: BaseRegularizer
 
     def __init__(self):
         self.parameters = []
+        self.regularizer = BaseRegularizer()
 
     def get_parameters(self):
         return self.parameters
+
+    def get_regularizer(self):
+        return self.regularizer
 
     def forward(self, X):
         pass
@@ -32,10 +38,11 @@ class LinearLayer(Layer):
     biased: bool
     activation: ActivationFunction
 
-    def __init__(self, n_neurons, activation, biased=False):
+    def __init__(self, n_neurons, activation, biased=False, regularizer=BaseRegularizer()):
         super().__init__()
         self.n_neurons = n_neurons
         self.activation = activation
+        self.regularizer = regularizer
         self.biased = biased
         self.W = None
         return
@@ -48,6 +55,7 @@ class LinearLayer(Layer):
             self.bias = Matrix.normal(shape=(1, self.n_neurons),
                                       require_grad=True)
             self.parameters = [self.W, self.bias]
+        self.regularizer.define_params(self.parameters)
         return
 
     def forward(self, X):
@@ -62,7 +70,8 @@ class LinearLayer(Layer):
     def __str__(self):
         return f"Linear Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}."
+               f"activation {self.activation}" \
+               f"regularizer {self.regularizer}."
 
 
 class BatchNormLayer(Layer):
@@ -100,8 +109,8 @@ class Conv2DLayer(LinearLayer):
     kernel_size: np.array([int, int])
     dilation: np.array([int, int])
 
-    def __init__(self, kernel_size, n_channels, activation, dilation=(1, 1), biased=False):
-        super().__init__(n_channels, activation, biased)
+    def __init__(self, kernel_size, n_channels, activation, dilation=(1, 1), biased=False, regularizer=BaseRegularizer()):
+        super().__init__(n_channels, activation, biased, regularizer)
         self.kernel_size = kernel_size
         self.dilation = dilation
         self.W = None
@@ -115,6 +124,7 @@ class Conv2DLayer(LinearLayer):
             self.bias = Matrix.normal(shape=(self.n_neurons),
                                       require_grad=True)
             self.parameters = [self.W, self.bias]
+        self.regularizer.define_params(self.parameters)
         return
 
     def forward(self, X):
@@ -138,7 +148,8 @@ class Conv2DLayer(LinearLayer):
                f"channels {self.n_neurons}, " \
                f"dilation {self.dilation}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}."
+               f"activation {self.activation}"  \
+               f"regularizer {self.regularizer}."
 
 
 class RecursiveLayer(Layer):
@@ -148,10 +159,11 @@ class RecursiveLayer(Layer):
     biased: bool
     activation: ActivationFunction
 
-    def __init__(self, n_neurons, activation, biased=False):
+    def __init__(self, n_neurons, activation, biased=False, regularizer=BaseRegularizer()):
         super().__init__()
         self.n_neurons = n_neurons
         self.activation = activation
+        self.regularizer = regularizer
         self.biased = biased
         self.Wx = None
         self.Wh = None
@@ -165,6 +177,8 @@ class RecursiveLayer(Layer):
         if self.biased:
             self.bias = Matrix.normal(shape=(1, self.n_neurons), require_grad=True)
             self.parameters = [self.Wx, self.Wh, self.bias]
+        self.regularizer.define_params(self.parameters)
+        return
 
     def forward(self, X):
         if self.Wx is None:
@@ -182,7 +196,8 @@ class RecursiveLayer(Layer):
     def __str__(self):
         return f"Recursive Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}."
+               f"activation {self.activation}"  \
+               f"regularizer {self.regularizer}."
 
 
 class RNNLayer(Layer):
@@ -192,12 +207,13 @@ class RNNLayer(Layer):
     biased: bool
     activation: ActivationFunction
 
-    def __init__(self, n_inner_neurons, n_out_neurons, activation, biased=False):
+    def __init__(self, n_inner_neurons, n_out_neurons, activation, biased=False, regularizer=BaseRegularizer()):
         super().__init__()
         self.n_inner_neurons = n_inner_neurons
         self.n_out_neurons = n_out_neurons
         self.activation = activation
         self.biased = biased
+        self.regularizer = regularizer
         self.layers = [
             RecursiveLayer(self.n_inner_neurons, self.activation, self.biased),
             LinearLayer(self.n_out_neurons, Linear(), self.biased)
@@ -210,13 +226,15 @@ class RNNLayer(Layer):
         for layer in self.layers:
             current = layer.forward(current)
             self.parameters += layer.get_parameters()
+        self.regularizer.define_params(self.parameters)
         return current
 
     def __str__(self):
         return f"RNN Layer with n_inner_neurons {self.n_inner_neurons}, " \
                f"n_out_neurons {self.n_out_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}."
+               f"activation {self.activation}"  \
+               f"regularizer {self.regularizer}."
 
 
 class FlattenLayer(Layer):

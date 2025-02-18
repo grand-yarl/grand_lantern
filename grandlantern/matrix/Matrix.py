@@ -168,6 +168,15 @@ class Matrix:
             new_local_gradients.append((self, lambda x: x * power * (self.value ** (power - 1)), 'pow'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
+    def __abs__(self):
+        new_value = np.abs(self.value)
+        new_local_gradients = []
+        new_require_grad = self.require_grad
+
+        if self.require_grad:
+            new_local_gradients.append((self, lambda x: x * np.sign(self.value), 'abs'))
+        return Matrix(new_value, new_local_gradients, new_require_grad)
+
     def reshape(self, shape):
         old_shape = self.shape
         new_value = self.value.reshape(shape)
