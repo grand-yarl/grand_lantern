@@ -32,7 +32,7 @@ class L1Regularizer(BaseRegularizer):
     def __call__(self):
         term = 0
         for param in self.parameters:
-            term += self.l1 * abs(param)
+            term += self.l1 * Matrix.sum(abs(param))
         return term
 
     def __str__(self):
@@ -50,8 +50,24 @@ class L2Regularizer(BaseRegularizer):
     def __call__(self):
         term = 0
         for param in self.parameters:
-            term += self.l2 * (param ** 2)
+            term += self.l2 * Matrix.sum(param ** 2)
         return term
 
     def __str__(self):
         return f"L2 regularizer with coefficient {self.l2}"
+
+
+class ElasticNetRegularizer(L1Regularizer, L2Regularizer):
+    
+    def __init__(self, l1, l2):
+        L1Regularizer.__init__(self, l1=l1)
+        L2Regularizer.__init__(self, l2=l2)
+
+    def __call__(self):
+        term = 0
+        for param in self.parameters:
+            term += self.l1 * Matrix.sum(abs(param)) + self.l2 * Matrix.sum(param ** 2)
+        return term
+
+    def __str__(self):
+        return f"Elastic Net regularizer with coefficient {self.l1} and {self.l2}"

@@ -70,7 +70,7 @@ class LinearLayer(Layer):
     def __str__(self):
         return f"Linear Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}" \
+               f"activation {self.activation}, " \
                f"regularizer {self.regularizer}."
 
 
@@ -169,7 +169,7 @@ class Conv2DLayer(LinearLayer):
                f"channels {self.n_neurons}, " \
                f"dilation {self.dilation}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}"  \
+               f"activation {self.activation}, "  \
                f"regularizer {self.regularizer}."
 
 
@@ -217,7 +217,7 @@ class RecursiveLayer(Layer):
     def __str__(self):
         return f"Recursive Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}"  \
+               f"activation {self.activation}, "  \
                f"regularizer {self.regularizer}."
 
 
@@ -254,7 +254,7 @@ class RNNLayer(Layer):
         return f"RNN Layer with n_inner_neurons {self.n_inner_neurons}, " \
                f"n_out_neurons {self.n_out_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}"  \
+               f"activation {self.activation}, "  \
                f"regularizer {self.regularizer}."
 
 
