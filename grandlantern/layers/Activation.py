@@ -43,7 +43,7 @@ class Tanh(ActivationFunction):
 class ReLU(ActivationFunction):
 
     def __call__(self, X):
-        return X * (Matrix.sign(X) + 1) / 2
+        return Matrix.relu(X)
 
     def __str__(self):
         return f"ReLU"
@@ -56,7 +56,7 @@ class LReLU(ActivationFunction):
         self.alpha = alpha
 
     def __call__(self, X):
-        return X * ((1 + Matrix.sign(X)) / 2 + self.alpha * (1 + Matrix.sign(-X)) / 2)
+        return Matrix.lrelu(X, alpha=self.alpha)
 
     def __str__(self):
         return f"LReLU"

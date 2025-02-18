@@ -245,7 +245,7 @@ class Matrix:
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x / (2 * obj.value + 10e-5), 'sqrt'))
+            new_local_gradients.append((obj, lambda x: x / (2 * new_value + 10e-5), 'sqrt'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
@@ -286,47 +286,11 @@ class Matrix:
 
     @classmethod
     def mean(cls, obj, axis=None, keepdims=False):
-        if not keepdims:
-            if axis is not None:
-                new_value = np.mean(obj.value, axis=axis)
-                new_local_gradients = []
-                new_require_grad = obj.require_grad
-
-                if obj.require_grad:
-                    n_elements = np.prod(np.array(obj.shape[axis]))
-                    new_local_gradients.append(
-                        (obj, lambda x: (np.expand_dims(np.array(x), axis=axis) + np.zeros(obj.shape)) / n_elements,
-                         'mean')
-                    )
-                return Matrix(new_value, new_local_gradients, new_require_grad)
-
-            else:
-                new_value = np.mean(obj.value, axis=axis)
-                new_local_gradients = []
-                new_require_grad = obj.require_grad
-
-                if obj.require_grad:
-                    n_elements = np.prod(np.array(obj.shape))
-                    new_local_gradients.append(
-                        (obj, lambda x: (x + np.zeros(obj.shape)) / n_elements, 'mean')
-                    )
-                return Matrix(new_value, new_local_gradients, new_require_grad)
-
+        if axis is not None:
+            n_elements = np.prod(np.array(obj.shape[axis]))
         else:
-            new_value = np.mean(obj.value, axis=axis, keepdims=True) * np.ones_like(obj.value)
-            new_local_gradients = []
-            new_require_grad = obj.require_grad
-
-            if obj.require_grad:
-                n_elements = None
-                if axis is not None:
-                    n_elements = np.prod(np.array(obj.shape[axis]))
-                else:
-                    n_elements = np.prod(np.array(obj.shape))
-                new_local_gradients.append(
-                    (obj, lambda x: x / n_elements, 'mean')
-                )
-        return Matrix(new_value, new_local_gradients, new_require_grad)
+            n_elements = np.prod(np.array(obj.shape))
+        return Matrix.sum(obj, axis=axis, keepdims=keepdims) / n_elements
 
     @classmethod
     def std(cls, obj, axis=None, keepdims=False):
@@ -352,6 +316,29 @@ class Matrix:
         new_value = np.sign(obj.value)
         new_require_grad = obj.require_grad
         return Matrix(new_value, require_grad=new_require_grad)
+
+    @classmethod
+    def relu(cls, obj):
+        zeros = np.zeros(obj.shape)
+        new_value = np.maximum(zeros, obj.value)
+        new_local_gradients = []
+        new_require_grad = obj.require_grad
+
+        if obj.require_grad:
+            new_local_gradients.append((obj, lambda x: x * np.sign(new_value), 'relu'))
+        return Matrix(new_value, new_local_gradients, new_require_grad)
+
+    @classmethod
+    def lrelu(cls, obj, alpha):
+        new_value = np.maximum(alpha * obj.value, obj.value)
+        new_local_gradients = []
+        new_require_grad = obj.require_grad
+
+        if obj.require_grad:
+            sign = np.sign(new_value)
+            sign[sign == 0] = alpha
+            new_local_gradients.append((obj, lambda x: x * sign, 'lrelu'))
+        return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def tanh(cls, obj):
