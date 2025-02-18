@@ -18,7 +18,7 @@ class Layer:
     def get_regularizer(self):
         return self.regularizer
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         pass
 
     def make_constant(self):
@@ -58,7 +58,7 @@ class LinearLayer(Layer):
         self.regularizer.define_params(self.parameters)
         return
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         if self.W is None:
             self.initialize_weights(X.shape[-1])
 
@@ -90,7 +90,7 @@ class BatchNormLayer(Layer):
         self.parameters = [self.gamma, self.beta]
         return
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         if (self.gamma is None) or (self.beta is None):
             self.initialize_weights(X.shape[1:])
 
@@ -103,6 +103,27 @@ class BatchNormLayer(Layer):
 
     def __str__(self):
         return f"Batch Norm Layer."
+
+
+class DropOutLayer(Layer):
+    prob: float
+
+    def __init__(self, prob=0.1):
+        super().__init__()
+        self.prob = prob
+        return
+
+    def forward(self, X, train_mode):
+        if train_mode:
+            d_shape = (1,) + X.shape[1:]
+            d = np.random.uniform(low=0, high=1, size=d_shape)
+            D = Matrix(d > self.prob)
+            return D * X
+        else:
+            return X
+
+    def __str__(self):
+        return f"Dropout Layer."
 
 
 class Conv2DLayer(LinearLayer):
@@ -127,7 +148,7 @@ class Conv2DLayer(LinearLayer):
         self.regularizer.define_params(self.parameters)
         return
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         if self.W is None:
             self.initialize_weights(X.shape[1])
 
@@ -180,7 +201,7 @@ class RecursiveLayer(Layer):
         self.regularizer.define_params(self.parameters)
         return
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         if self.Wx is None:
             self.initialize_weights(X.shape[2])
 
@@ -220,11 +241,11 @@ class RNNLayer(Layer):
         ]
         return
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         current = X
         self.parameters = []
         for layer in self.layers:
-            current = layer.forward(current)
+            current = layer.forward(current, train_mode)
             self.parameters += layer.get_parameters()
         self.regularizer.define_params(self.parameters)
         return current
@@ -245,7 +266,7 @@ class FlattenLayer(Layer):
         self.biased = False
         return
 
-    def forward(self, X):
+    def forward(self, X, train_mode):
         self.input_shape = np.array(X.shape)
         X_reshaped = X.reshape(shape=(X.shape[0], np.prod(self.input_shape[1:])))
         return X_reshaped
