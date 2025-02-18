@@ -54,7 +54,7 @@ NN = model(n_epochs=100,
 
 ```python
 from grandlantern.layers import LinearLayer
-from grandlantern.layers.Activation import Sigmoid, ReLU, SoftMax
+from grandlantern.layers import Sigmoid, ReLU, SoftMax
 
 NN.add_layer(LinearLayer(n_neurons=100, activation=Sigmoid(), biased=True))
 NN.add_layer(LinearLayer(n_neurons=50, activation=ReLU(), biased=True))
@@ -64,7 +64,7 @@ NN.add_layer(LinearLayer(n_neurons=10, activation=SoftMax(), biased=True))
 Also layers can be added using attribute model.layers:
 ```python
 from grandlantern.layers import LinearLayer
-from grandlantern.layers.Activation import Sigmoid, ReLU, SoftMax
+from grandlantern.layers import Sigmoid, ReLU, SoftMax
 
 NN.layers = 
 [
@@ -86,7 +86,7 @@ Inputs for training must be numpy arrays. There is also option to validate model
 (X_test and y_test are optional).
 
 ```python
-NN.fit(X_train, y_train.reshape(-1, 1), X_test, y_test.reshape(-1, 1))
+NN.fit(X_train, y_train, X_test, y_test)
 ```
 
 ### 7. Use model
@@ -104,7 +104,9 @@ y_pred = NN.predict(X_test)
 * Linear Layer (LinearLayer)
 * Image Convolutional Layer (Conv2DLayer)
 * Batch Normalization Layer (BatchNormLayer)
+* Recurrent Layer (RecurrentLayer)
 * RNN Layer (RNNLayer)
+* Flatten Layer (FlattenLayer)
 
 ### Optimizers
 
@@ -113,21 +115,31 @@ y_pred = NN.predict(X_test)
 * Adagrad
 * Adam
 
+### Datasets and Iterators
+
+* Dataset Iterator with shuffle
+* Table Dataset
+* Image Dataset
+* Sequence Dataset
+
+### Regularization
+
+* L1, L2, Elastic Net
+* Dropout Layer (DropOutLayer)
+
 ## What will be done 📝
 
 ### New Layers
 
+* Bidirectional RNN
 * LSTM, GRU layers
+* Attention layers
+* Seq2seq model
 * Transformers
+* Pooling layers
 
 ### GPU Accelaration using cupy
 
 ### Some more optimizers
-
-### Regularization
-
-* L1, L2 regularization
-* Dropout
-* Pooling
 
 ### Preprocessing modules

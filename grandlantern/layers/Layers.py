@@ -52,7 +52,7 @@ class LinearLayer(Layer):
                                require_grad=True)
         self.parameters = [self.W]
         if self.biased:
-            self.bias = Matrix.normal(shape=(1, self.n_neurons),
+            self.bias = Matrix.normal(shape=(self.n_neurons),
                                       require_grad=True)
             self.parameters = [self.W, self.bias]
         self.regularizer.define_params(self.parameters)
@@ -123,7 +123,7 @@ class DropOutLayer(Layer):
             return X
 
     def __str__(self):
-        return f"Dropout Layer."
+        return f"Dropout Layer with zero probability {self.prob}."
 
 
 class Conv2DLayer(LinearLayer):
@@ -196,7 +196,7 @@ class RecursiveLayer(Layer):
         self.parameters = [self.Wx, self.Wh]
 
         if self.biased:
-            self.bias = Matrix.normal(shape=(1, self.n_neurons), require_grad=True)
+            self.bias = Matrix.normal(shape=(self.n_neurons), require_grad=True)
             self.parameters = [self.Wx, self.Wh, self.bias]
         self.regularizer.define_params(self.parameters)
         return
