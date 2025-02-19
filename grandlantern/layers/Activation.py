@@ -62,6 +62,28 @@ class LReLU(ActivationFunction):
         return f"LReLU"
 
 
+class PReLU(ActivationFunction):
+    p_alpha: Matrix
+
+    def __init__(self):
+        self.p_alpha = Matrix.uniform(shape=(1), low=0, high=1., require_grad=True)
+
+    def __call__(self, X):
+        return Matrix.lrelu(X, alpha=self.p_alpha)
+
+    def __str__(self):
+        return f"PReLU"
+
+
+class SiLU(ActivationFunction):
+
+    def __call__(self, X):
+        return X * Matrix.sigmoid(X)
+
+    def __str__(self):
+        return f"SiLU"
+
+
 class SoftMax(ActivationFunction):
 
     def __call__(self, X):

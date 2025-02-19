@@ -1,1 +1,1 @@
-from .Optimizers import Optimizer, SGD, NAD, Adagrad, Adam
+from .Optimizers import Optimizer, SGD, NAD, Adagrad, RMSProp, Adam

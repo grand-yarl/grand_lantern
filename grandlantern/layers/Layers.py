@@ -1,6 +1,6 @@
 import numpy as np
 from grandlantern.matrix.Matrix import Matrix
-from .Activation import ActivationFunction, Linear
+from .Activation import ActivationFunction, Linear, Sigmoid, Tanh
 from .Regularizers import BaseRegularizer
 
 
@@ -218,6 +218,180 @@ class RecursiveLayer(Layer):
         return f"Recursive Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
                f"activation {self.activation}, "  \
+               f"regularizer {self.regularizer}."
+
+
+class LSTMLayer(Layer):
+    # Forget gate
+    Wfx: Matrix
+    Wfh: Matrix
+    bias_f: Matrix
+
+    # Input gate
+    Wix: Matrix
+    Wih: Matrix
+    bias_i: Matrix
+
+    # Cell gate
+    Wcx: Matrix
+    Wch: Matrix
+    bias_c: Matrix
+
+    # Output gate
+    Wox: Matrix
+    Woh: Matrix
+    bias_o: Matrix
+
+    biased: bool
+
+    def __init__(self, n_neurons, biased=False, regularizer=BaseRegularizer()):
+        super().__init__()
+        self.n_neurons = n_neurons
+        self.regularizer = regularizer
+        self.biased = biased
+
+        self.Wfx = None
+        self.Wfh = None
+        self.Wix = None
+        self.Wih = None
+        self.Wcx = None
+        self.Wch = None
+        self.Wox = None
+        self.Woh = None
+        return
+
+    def initialize_weights(self, n_inputs):
+        self.Wfx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wfh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+
+        self.Wix = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wih = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+
+        self.Wcx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wch = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+
+        self.Wox = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Woh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.parameters = [self.Wfx, self.Wfh, self.Wix, self.Wih, self.Wcx, self.Wch, self.Wox, self.Woh]
+
+        if self.biased:
+            self.bias_f = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_i = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_c = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_o = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.parameters = [self.Wfx, self.Wfh, self.Wix, self.Wih, self.Wcx, self.Wch, self.Wox, self.Woh,
+                               self.bias_f, self.bias_i, self.bias_c, self.bias_o]
+        self.regularizer.define_params(self.parameters)
+        return
+
+    def forward(self, X, train_mode):
+        if self.Wfx is None:
+            self.initialize_weights(X.shape[2])
+
+        H = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+        C = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+
+        sigmoid = Sigmoid()
+        tanh = Tanh()
+        for i in range(X.shape[1]):
+            if self.biased:
+                f_t = sigmoid(X[:, i] @ self.Wfx + H[:, i] @ self.Wfh + self.bias_f)
+                i_t = sigmoid(X[:, i] @ self.Wix + H[:, i] @ self.Wih + self.bias_i)
+                c_t = tanh(X[:, i] @ self.Wcx + H[:, i] @ self.Wch + self.bias_c)
+                C[:, i + 1] = f_t * C[:, i] + i_t * c_t
+
+                o_t = sigmoid(X[:, i] @ self.Wox + H[:, i] @ self.Woh + self.bias_o)
+                H[:, i + 1] = o_t * tanh(C[:, i + 1])
+            else:
+                f_t = sigmoid(X[:, i] @ self.Wfx + H[:, i] @ self.Wfh)
+                i_t = sigmoid(X[:, i] @ self.Wix + H[:, i] @ self.Wih)
+                c_t = tanh(X[:, i] @ self.Wcx + H[:, i] @ self.Wch)
+                C[:, i + 1] = f_t * C[:, i] + i_t * c_t
+
+                o_t = sigmoid(X[:, i] @ self.Wox + H[:, i] @ self.Woh)
+                H[:, i + 1] = o_t * tanh(C[:, i + 1])
+        return H[:, 1:]
+
+    def __str__(self):
+        return f"LSTM Layer with n_neurons {self.n_neurons}, " \
+               f"biased {self.biased}, " \
+               f"regularizer {self.regularizer}."
+
+
+class GRULayer(Layer):
+    # Update gate
+    Wzx: Matrix
+    Wzh: Matrix
+    bias_z: Matrix
+
+    # Reset gate
+    Wrx: Matrix
+    Wrh: Matrix
+    bias_r: Matrix
+
+    # Hidden gate
+    Whx: Matrix
+    Whh: Matrix
+    bias_h: Matrix
+
+    def __init__(self, n_neurons, biased=False, regularizer=BaseRegularizer()):
+        super().__init__()
+        self.n_neurons = n_neurons
+        self.regularizer = regularizer
+        self.biased = biased
+
+        self.Wzx = None
+        self.Wzh = None
+        self.Wrx = None
+        self.Wrh = None
+        self.Whx = None
+        self.Whh = None
+        return
+
+    def initialize_weights(self, n_inputs):
+        self.Wzx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wzh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+
+        self.Wrx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wrh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+
+        self.Whx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Whh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.parameters = [self.Wzx, self.Wzh, self.Wrx, self.Wrh, self.Whx, self.Whh]
+
+        if self.biased:
+            self.bias_z = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_r = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_h = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.parameters = [self.Wzx, self.Wzh, self.Wrx, self.Wrh, self.Whx, self.Whh,
+                               self.bias_z, self.bias_r, self.bias_h]
+        self.regularizer.define_params(self.parameters)
+        return
+
+    def forward(self, X, train_mode):
+        if self.Wzx is None:
+            self.initialize_weights(X.shape[2])
+
+        H = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+
+        sigmoid = Sigmoid()
+        tanh = Tanh()
+        for i in range(X.shape[1]):
+            if self.biased:
+                z_t = sigmoid(X[:, i] @ self.Wzx + H[:, i] @ self.Wzh + self.bias_z)
+                r_t = sigmoid(X[:, i] @ self.Wrx + H[:, i] @ self.Wrh + self.bias_r)
+                h_t = tanh((H[:, i] * r_t) @ self.Whh + X[:, i] @ self.Whx + self.bias_h)
+                H[:, i + 1] = (1 - z_t) * H[:, i] + z_t * h_t
+            else:
+                z_t = sigmoid(X[:, i] @ self.Wzx + H[:, i] @ self.Wzh)
+                r_t = sigmoid(X[:, i] @ self.Wrx + H[:, i] @ self.Wrh)
+                h_t = tanh((H[:, i] * r_t) @ self.Whh + X[:, i] @ self.Whx)
+                H[:, i + 1] = (1 - z_t) * H[:, i] + z_t * h_t
+        return H[:, 1:]
+
+    def __str__(self):
+        return f"GRU Layer with n_neurons {self.n_neurons}, " \
+               f"biased {self.biased}, " \
                f"regularizer {self.regularizer}."
 
 
