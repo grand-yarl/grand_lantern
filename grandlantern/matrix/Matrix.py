@@ -208,6 +208,23 @@ class Matrix:
         return Matrix(new_value, require_grad=require_grad)
 
     @classmethod
+    def stack(cls, stack_list, axis=0):
+        full_shape = list(stack_list[0].shape)
+        full_shape.insert(axis, len(stack_list))
+        new_shape = list(stack_list[0].shape)
+        new_shape.insert(axis, 1)
+        stacked = Matrix.zeros(shape=full_shape)
+        for i in range(len(stack_list)):
+
+            slices = []
+            for j in range(stack_list[0].ndim):
+                slices.append(slice(None))
+            slices.insert(axis, slice(i, i + 1, None))
+
+            stacked[tuple(slices)] = stack_list[i].reshape(shape=new_shape)
+        return stacked
+
+    @classmethod
     def sin(cls, obj):
         new_value = np.sin(obj.value)
         new_local_gradients = []

@@ -48,12 +48,11 @@ class LinearLayer(Layer):
         return
 
     def initialize_weights(self, n_inputs):
-        self.W = Matrix.normal(shape=(n_inputs, self.n_neurons),
-                               require_grad=True)
+        k = np.sqrt(1 / n_inputs)
+        self.W = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
         self.parameters = [self.W]
         if self.biased:
-            self.bias = Matrix.normal(shape=(self.n_neurons),
-                                      require_grad=True)
+            self.bias = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
             self.parameters = [self.W, self.bias]
         self.regularizer.define_params(self.parameters)
         return
@@ -191,12 +190,13 @@ class RecursiveLayer(Layer):
         return
 
     def initialize_weights(self, n_inputs):
-        self.Wx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Wh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        k = np.sqrt(1 / self.n_neurons)
+        self.Wx = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wh = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
         self.parameters = [self.Wx, self.Wh]
 
         if self.biased:
-            self.bias = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
             self.parameters = [self.Wx, self.Wh, self.bias]
         self.regularizer.define_params(self.parameters)
         return
@@ -205,19 +205,22 @@ class RecursiveLayer(Layer):
         if self.Wx is None:
             self.initialize_weights(X.shape[2])
 
-        H = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+        h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
+        h = [h0]
 
         for i in range(X.shape[1]):
             if self.biased:
-                H[:, i + 1] = self.activation(X[:, i] @ self.Wx + H[:, i] @ self.Wh + self.bias)
+                h.append(self.activation(X[:, i] @ self.Wx + h[i] @ self.Wh + self.bias))
             else:
-                H[:, i + 1] = self.activation(X[:, i] @ self.Wx + H[:, i] @ self.Wh)
-        return H[:, 1:]
+                h.append(self.activation(X[:, i] @ self.Wx + h[i] @ self.Wh + self.bias))
+
+        H = Matrix.stack(h[1:], axis=1)
+        return H
 
     def __str__(self):
         return f"Recursive Layer with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
-               f"activation {self.activation}, "  \
+               f"activation {self.activation}, " \
                f"regularizer {self.regularizer}."
 
 
@@ -261,24 +264,25 @@ class LSTMLayer(Layer):
         return
 
     def initialize_weights(self, n_inputs):
-        self.Wfx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Wfh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        k = np.sqrt(1 / self.n_neurons)
+        self.Wfx = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wfh = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
 
-        self.Wix = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Wih = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.Wix = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wih = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
 
-        self.Wcx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Wch = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.Wcx = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wch = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
 
-        self.Wox = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Woh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.Wox = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Woh = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
         self.parameters = [self.Wfx, self.Wfh, self.Wix, self.Wih, self.Wcx, self.Wch, self.Wox, self.Woh]
 
         if self.biased:
-            self.bias_f = Matrix.normal(shape=(self.n_neurons), require_grad=True)
-            self.bias_i = Matrix.normal(shape=(self.n_neurons), require_grad=True)
-            self.bias_c = Matrix.normal(shape=(self.n_neurons), require_grad=True)
-            self.bias_o = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_f = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
+            self.bias_i = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
+            self.bias_c = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
+            self.bias_o = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
             self.parameters = [self.Wfx, self.Wfh, self.Wix, self.Wih, self.Wcx, self.Wch, self.Wox, self.Woh,
                                self.bias_f, self.bias_i, self.bias_c, self.bias_o]
         self.regularizer.define_params(self.parameters)
@@ -288,29 +292,34 @@ class LSTMLayer(Layer):
         if self.Wfx is None:
             self.initialize_weights(X.shape[2])
 
-        H = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
-        C = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+        h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
+        h = [h0]
+
+        c0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
+        c = [c0]
 
         sigmoid = Sigmoid()
         tanh = Tanh()
         for i in range(X.shape[1]):
             if self.biased:
-                f_t = sigmoid(X[:, i] @ self.Wfx + H[:, i] @ self.Wfh + self.bias_f)
-                i_t = sigmoid(X[:, i] @ self.Wix + H[:, i] @ self.Wih + self.bias_i)
-                c_t = tanh(X[:, i] @ self.Wcx + H[:, i] @ self.Wch + self.bias_c)
-                C[:, i + 1] = f_t * C[:, i] + i_t * c_t
+                f_t = sigmoid(X[:, i] @ self.Wfx + h[i] @ self.Wfh + self.bias_f)
+                i_t = sigmoid(X[:, i] @ self.Wix + h[i] @ self.Wih + self.bias_i)
+                c_t = tanh(X[:, i] @ self.Wcx + h[i] @ self.Wch + self.bias_c)
+                c.append(f_t * c[i] + i_t * c_t)
 
-                o_t = sigmoid(X[:, i] @ self.Wox + H[:, i] @ self.Woh + self.bias_o)
-                H[:, i + 1] = o_t * tanh(C[:, i + 1])
+                o_t = sigmoid(X[:, i] @ self.Wox + h[i] @ self.Woh + self.bias_o)
+                h.append(o_t * tanh(c[i + 1]))
             else:
-                f_t = sigmoid(X[:, i] @ self.Wfx + H[:, i] @ self.Wfh)
-                i_t = sigmoid(X[:, i] @ self.Wix + H[:, i] @ self.Wih)
-                c_t = tanh(X[:, i] @ self.Wcx + H[:, i] @ self.Wch)
-                C[:, i + 1] = f_t * C[:, i] + i_t * c_t
+                f_t = sigmoid(X[:, i] @ self.Wfx + h[i] @ self.Wfh)
+                i_t = sigmoid(X[:, i] @ self.Wix + h[i] @ self.Wih)
+                c_t = tanh(X[:, i] @ self.Wcx + h[i] @ self.Wch)
+                c.append(f_t * c[i] + i_t * c_t)
 
-                o_t = sigmoid(X[:, i] @ self.Wox + H[:, i] @ self.Woh)
-                H[:, i + 1] = o_t * tanh(C[:, i + 1])
-        return H[:, 1:]
+                o_t = sigmoid(X[:, i] @ self.Wox + h[i] @ self.Woh)
+                h.append(o_t * tanh(c[i + 1]))
+
+        H = Matrix.stack(h[1:], axis=1)
+        return H
 
     def __str__(self):
         return f"LSTM Layer with n_neurons {self.n_neurons}, " \
@@ -349,20 +358,21 @@ class GRULayer(Layer):
         return
 
     def initialize_weights(self, n_inputs):
-        self.Wzx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Wzh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        k = np.sqrt(1 / self.n_neurons)
+        self.Wzx = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wzh = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
 
-        self.Wrx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Wrh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.Wrx = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Wrh = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
 
-        self.Whx = Matrix.normal(shape=(n_inputs, self.n_neurons), require_grad=True)
-        self.Whh = Matrix.normal(shape=(self.n_neurons, self.n_neurons), require_grad=True)
+        self.Whx = Matrix.uniform(low=-k, high=k, shape=(n_inputs, self.n_neurons), require_grad=True)
+        self.Whh = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons, self.n_neurons), require_grad=True)
         self.parameters = [self.Wzx, self.Wzh, self.Wrx, self.Wrh, self.Whx, self.Whh]
 
         if self.biased:
-            self.bias_z = Matrix.normal(shape=(self.n_neurons), require_grad=True)
-            self.bias_r = Matrix.normal(shape=(self.n_neurons), require_grad=True)
-            self.bias_h = Matrix.normal(shape=(self.n_neurons), require_grad=True)
+            self.bias_z = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
+            self.bias_r = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
+            self.bias_h = Matrix.uniform(low=-k, high=k, shape=(self.n_neurons), require_grad=True)
             self.parameters = [self.Wzx, self.Wzh, self.Wrx, self.Wrh, self.Whx, self.Whh,
                                self.bias_z, self.bias_r, self.bias_h]
         self.regularizer.define_params(self.parameters)
@@ -372,22 +382,25 @@ class GRULayer(Layer):
         if self.Wzx is None:
             self.initialize_weights(X.shape[2])
 
-        H = Matrix.zeros(shape=(X.shape[0], X.shape[1] + 1, self.n_neurons))
+        h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
+        h = [h0]
 
         sigmoid = Sigmoid()
         tanh = Tanh()
         for i in range(X.shape[1]):
             if self.biased:
-                z_t = sigmoid(X[:, i] @ self.Wzx + H[:, i] @ self.Wzh + self.bias_z)
-                r_t = sigmoid(X[:, i] @ self.Wrx + H[:, i] @ self.Wrh + self.bias_r)
-                h_t = tanh((H[:, i] * r_t) @ self.Whh + X[:, i] @ self.Whx + self.bias_h)
-                H[:, i + 1] = (1 - z_t) * H[:, i] + z_t * h_t
+                z_t = sigmoid(X[:, i] @ self.Wzx + h[i] @ self.Wzh + self.bias_z)
+                r_t = sigmoid(X[:, i] @ self.Wrx + h[i] @ self.Wrh + self.bias_r)
+                h_t = tanh((h[i] * r_t) @ self.Whh + X[:, i] @ self.Whx + self.bias_h)
+                h.append((1 - z_t) * h[i] + z_t * h_t)
             else:
-                z_t = sigmoid(X[:, i] @ self.Wzx + H[:, i] @ self.Wzh)
-                r_t = sigmoid(X[:, i] @ self.Wrx + H[:, i] @ self.Wrh)
-                h_t = tanh((H[:, i] * r_t) @ self.Whh + X[:, i] @ self.Whx)
-                H[:, i + 1] = (1 - z_t) * H[:, i] + z_t * h_t
-        return H[:, 1:]
+                z_t = sigmoid(X[:, i] @ self.Wzx + h[i] @ self.Wzh)
+                r_t = sigmoid(X[:, i] @ self.Wrx + h[i] @ self.Wrh)
+                h_t = tanh((h[i] * r_t) @ self.Whh + X[:, i] @ self.Whx)
+                h.append((1 - z_t) * h[i] + z_t * h_t)
+
+        H = Matrix.stack(h[1:], axis=1)
+        return H
 
     def __str__(self):
         return f"GRU Layer with n_neurons {self.n_neurons}, " \
