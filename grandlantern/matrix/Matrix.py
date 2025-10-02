@@ -187,6 +187,17 @@ class Matrix:
             new_local_gradients.append((self, lambda x: x.reshape(old_shape), 'reshape'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
+    def transpose(self):
+        new_value = np.moveaxis(self.value, -1, -2)
+        new_local_gradients = []
+        new_require_grad = self.require_grad
+        if self.require_grad:
+            new_local_gradients.append((self, lambda x: np.moveaxis(x, -1, -2), 'transpose'))
+        return Matrix(new_value, new_local_gradients, new_require_grad)
+
+    def T(self):
+        return self.transpose()
+
     @classmethod
     def zeros(cls, shape, require_grad=False):
         new_value = np.zeros(shape)
