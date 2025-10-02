@@ -187,6 +187,7 @@ class RecursiveLayer(Layer):
         self.biased = biased
         self.Wx = None
         self.Wh = None
+        self.h0 = None
         return
 
     def initialize_weights(self, n_inputs):
@@ -204,9 +205,10 @@ class RecursiveLayer(Layer):
     def forward(self, X, train_mode):
         if self.Wx is None:
             self.initialize_weights(X.shape[2])
+        if self.h0 is None:
+            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=True)
 
-        h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
-        h = [h0]
+        h = [self.h0]
 
         for i in range(X.shape[1]):
             if self.biased:
@@ -261,6 +263,7 @@ class LSTMLayer(Layer):
         self.Wch = None
         self.Wox = None
         self.Woh = None
+        self.h0 = None
         return
 
     def initialize_weights(self, n_inputs):
@@ -291,11 +294,11 @@ class LSTMLayer(Layer):
     def forward(self, X, train_mode):
         if self.Wfx is None:
             self.initialize_weights(X.shape[2])
-
-        h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
-        h = [h0]
+        if self.h0 is None:
+            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=True)
 
         c0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
+        h = [self.h0]
         c = [c0]
 
         sigmoid = Sigmoid()
@@ -355,6 +358,7 @@ class GRULayer(Layer):
         self.Wrh = None
         self.Whx = None
         self.Whh = None
+        self.h0 = None
         return
 
     def initialize_weights(self, n_inputs):
@@ -381,9 +385,10 @@ class GRULayer(Layer):
     def forward(self, X, train_mode):
         if self.Wzx is None:
             self.initialize_weights(X.shape[2])
+        if self.h0 is None:
+            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=True)
 
-        h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
-        h = [h0]
+        h = [self.h0]
 
         sigmoid = Sigmoid()
         tanh = Tanh()
@@ -443,6 +448,34 @@ class RNNLayer(Layer):
                f"biased {self.biased}, " \
                f"activation {self.activation}, "  \
                f"regularizer {self.regularizer}."
+
+
+class EmbeddingLayer(Layer):
+    Emb: list[Matrix]
+    emb_num: int
+    emb_dim: int
+
+    def __init__(self, emb_num, emb_dim):
+        super().__init__()
+
+        self.Emb = []
+        for i in range(emb_num):
+            self.Emb.append(Matrix.uniform(low=-1, high=1, shape=(emb_dim), require_grad=True))
+
+        self.emb_num = emb_num
+        self.emb_dim = emb_dim
+        return
+
+    def forward(self, X, train_mode):
+        emb_list = []
+        for index in X:
+            emb_list.append(self.Emb[index])
+        embeddings = Matrix.stack(emb_list)
+        return embeddings
+
+    def __str__(self):
+        return f"Embedding Layer with number of embeddings {self.emb_num}, " \
+               f"dimension {self.emb_dim}."
 
 
 class FlattenLayer(Layer):
