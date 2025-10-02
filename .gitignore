@@ -2,3 +2,5 @@ dist/
 .idea/
 .venv/
 **/__pycache__/
+build/
+grandlantern.egg-info/
