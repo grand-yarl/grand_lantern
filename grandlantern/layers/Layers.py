@@ -471,6 +471,7 @@ class EmbeddingLayer(Layer):
         for index in X:
             emb_list.append(self.Emb[index])
         embeddings = Matrix.stack(emb_list)
+        self.parameters = emb_list
         return embeddings
 
     def __str__(self):
