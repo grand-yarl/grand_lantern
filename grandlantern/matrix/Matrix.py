@@ -476,7 +476,19 @@ class Matrix:
         return gradients
 
     def __getitem__(self, idx):
-        return Matrix(self.value[idx])
+        def compute_gradient(grad, target):
+            target_grad = np.zeros((target.shape))
+            target_grad[idx] = grad
+            return target_grad
+
+        new_value = self.value[idx]
+        new_local_gradients = []
+        new_require_grad = self.require_grad
+
+        if self.require_grad:
+            new_local_gradients.append((self, lambda x: compute_gradient(x, self), 'getitem'))
+
+        return Matrix(new_value, new_local_gradients, new_require_grad)
 
     def __setitem__(self, key, item):
         if isinstance(item, Matrix):

@@ -118,15 +118,15 @@ class model():
         for epoch in range(self.n_epochs):
             loss_train, metric_train = self.train(train_dataset_iterator)
 
-            loss_msg = f"Epoch {epoch + 1:>4d}: Train {self.loss_fn}: {loss_train:==7f} "
-            metric_msg = f"Epoch {epoch + 1:>4d}: Train {self.metric_fn}: {metric_train:==7f} "
+            loss_msg = f"Epoch {epoch + 1:>4d}: Train loss {self.loss_fn}: {loss_train:==7f} "
+            metric_msg = f"Epoch {epoch + 1:>4d}: Train metric {self.metric_fn}: {metric_train:==7f} "
             self.fit_error[epoch] = loss_train
 
             if (X_val is not None) and (y_val is not None):
                 loss_val, metric_val = self.test(val_dataset_iterator)
 
-                loss_msg += f" Test {self.loss_fn}: {loss_val:==7f} "
-                metric_msg += f" Test {self.metric_fn}: {metric_val:==7f} "
+                loss_msg += f" Test loss {self.loss_fn}: {loss_val:==7f} "
+                metric_msg += f" Test metric {self.metric_fn}: {metric_val:==7f} "
                 self.val_error[epoch] = loss_val
 
             print(loss_msg)

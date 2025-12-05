@@ -177,14 +177,16 @@ class RecursiveLayer(Layer):
     Wh: Matrix
     bias: Matrix
     biased: bool
+    train_init: bool
     activation: ActivationFunction
 
-    def __init__(self, n_neurons, activation, biased=False, regularizer=BaseRegularizer()):
+    def __init__(self, n_neurons, activation, biased=False, train_init=False, regularizer=BaseRegularizer()):
         super().__init__()
         self.n_neurons = n_neurons
         self.activation = activation
         self.regularizer = regularizer
         self.biased = biased
+        self.train_init = train_init
         self.Wx = None
         self.Wh = None
         self.h0 = None
@@ -206,9 +208,10 @@ class RecursiveLayer(Layer):
         if self.Wx is None:
             self.initialize_weights(X.shape[2])
         if self.h0 is None:
-            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=True)
+            self.h0 = Matrix.zeros(shape=(self.n_neurons), require_grad=self.train_init)
 
-        h = [self.h0]
+        h0 = Matrix.stack([self.h0 for i in range(X.shape[0])])
+        h = [h0]
 
         for i in range(X.shape[1]):
             if self.biased:
