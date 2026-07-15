@@ -1,4 +1,8 @@
-import numpy as np
+try:
+    import cupy as np
+except:
+    import numpy as np
+import math
 from grandlantern.matrix.Matrix import Matrix
 from .Activation import ActivationFunction, Linear, Sigmoid, Tanh
 from .Regularizers import BaseRegularizer
@@ -126,8 +130,8 @@ class DropOutLayer(Layer):
 
 
 class Conv2DLayer(LinearLayer):
-    kernel_size: np.array([int, int])
-    dilation: np.array([int, int])
+    kernel_size: tuple
+    dilation: tuple
 
     def __init__(self, kernel_size, n_channels, activation, dilation=(1, 1), biased=False, regularizer=BaseRegularizer()):
         super().__init__(n_channels, activation, biased, regularizer)
@@ -491,9 +495,28 @@ class FlattenLayer(Layer):
         return
 
     def forward(self, X, train_mode):
-        self.input_shape = np.array(X.shape)
-        X_reshaped = X.reshape(shape=(X.shape[0], np.prod(self.input_shape[1:])))
+        self.input_shape = X.shape
+        X_reshaped = X.reshape(shape=(X.shape[0], math.prod(self.input_shape[1:])))
         return X_reshaped
 
     def __str__(self):
         return f"Flatten layer."
+
+
+class ReshapeLayer(Layer):
+    input_shape: tuple
+    output_shape: tuple                                                                 
+
+    def __init__(self, output_shape):
+        super().__init__()                                              
+        self.output_shape = output_shape                                                                                                                                                                                                                                                                                                  
+        self.biased = False
+        return
+
+    def forward(self, X, train_mode):
+        self.input_shape = np.array(X.shape)
+        X_reshaped = X.reshape(shape=(X.shape[0], *self.output_shape))
+        return X_reshaped
+
+    def __str__(self):
+        return f"Reshape layer with output shape {self.output_shape}."

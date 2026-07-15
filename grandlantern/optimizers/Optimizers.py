@@ -1,5 +1,8 @@
+try:
+    import cupy as np
+except:
+    import numpy as np
 from grandlantern.matrix.Matrix import Matrix
-import numpy as np
 
 
 class Optimizer:

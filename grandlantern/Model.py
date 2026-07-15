@@ -1,4 +1,8 @@
-import numpy as np
+try:
+    import cupy as np
+except:
+    import numpy as np
+
 from copy import copy
 from .matrix import Matrix
 from .layers import Layer
@@ -148,4 +152,122 @@ class model():
         model_str = ""
         for layer in self.layers:
             model_str += (str(layer) + "\n")
+        return model_str
+
+
+class autoencoder():
+    coder: model
+    decoder: model
+
+    def __init__(self, n_epochs, dataset_iterator, loss_function, metric_function, optimizer, coder, decoder):
+        self.n_epochs = n_epochs
+        self.dataset_it = dataset_iterator
+        self.loss_fn = loss_function
+        self.metric_fn = metric_function
+        self.optimizer = optimizer
+        self.parameters = []
+        self.regularizators = []
+        self.coder = coder
+        self.decoder = decoder
+        return 
+    
+    def code(self, X):
+        code = self.coder.test_forward(X)
+        return code
+    
+    def decode(self, Z):
+        decode = self.decoder.test_forward(Z)
+        return decode
+    
+    def train(self, X):
+        code = self.coder.train_forward(X)
+        decode = self.decoder.train_forward(code)
+
+        self.parameters = self.coder.parameters + self.decoder.parameters
+        self.regularizators = self.coder.regularizators + self.decoder.regularizators
+        return decode
+    
+    def train(self, dataset_iterator):
+        sum_loss_train = 0
+        sum_metric_train = 0
+
+        for (X_batch, y_batch) in dataset_iterator():
+            self.coder.zero_grad()
+            self.decoder.zero_grad()
+            code = self.coder.train_forward(X_batch)
+            y_pred = self.decoder.train_forward(code)
+
+            loss = self.loss_fn(y_batch, y_pred)
+            for regularizator in self.regularizators:
+                loss += regularizator()
+            gradients = loss.backward()
+
+            self.optimizer.optimize(self.decoder.parameters, gradients)
+            self.optimizer.optimize(self.coder.parameters, gradients)
+            # print(Matrix.mean(loss))
+
+            metric = self.metric_fn(y_batch, y_pred)
+
+            sum_loss_train += np.mean(loss.value)
+            sum_metric_train += metric
+
+        loss_train = sum_loss_train / dataset_iterator.n_batches
+        metric_train = sum_metric_train / dataset_iterator.n_batches
+
+        return loss_train, metric_train
+    
+    def test(self, dataset_iterator):
+        sum_loss_val = 0
+        sum_metric_val = 0
+
+        for (X_batch, y_batch) in dataset_iterator():
+            code = self.coder.test_forward(X_batch)
+            y_pred = self.decoder.test_forward(code)
+
+            loss = self.loss_fn(y_batch, y_pred)
+            metric = self.metric_fn(y_batch, y_pred)
+
+            sum_loss_val += np.mean(loss.value)
+            sum_metric_val += metric
+
+        loss_val = sum_loss_val / dataset_iterator.n_batches
+        metric_val = sum_metric_val / dataset_iterator.n_batches
+
+        return loss_val, metric_val
+    
+    def fit(self, X, y=None, X_val=None, y_val=None):
+
+        train_dataset_iterator = copy(self.dataset_it)
+        train_dataset_iterator.fill(X, X)
+        self.fit_error = np.zeros((self.n_epochs))
+
+        val_dataset_iterator = None
+        if (X_val is not None) and (y_val is not None):
+            val_dataset_iterator = copy(self.dataset_it)
+            val_dataset_iterator.fill(X_val, X_val)
+            self.val_error = np.zeros((self.n_epochs))
+
+        for epoch in range(self.n_epochs):
+            loss_train, metric_train = self.train(train_dataset_iterator)
+
+            loss_msg = f"Epoch {epoch + 1:>4d}: Train loss {self.loss_fn}: {loss_train:==7f} "
+            metric_msg = f"Epoch {epoch + 1:>4d}: Train metric {self.metric_fn}: {metric_train:==7f} "
+            self.fit_error[epoch] = loss_train
+
+            if X_val is not None:
+                loss_val, metric_val = self.test(val_dataset_iterator)
+
+                loss_msg += f" Test loss {self.loss_fn}: {loss_val:==7f} "
+                metric_msg += f" Test metric {self.metric_fn}: {metric_val:==7f} "
+                self.val_error[epoch] = loss_val
+
+            print(loss_msg)
+            print(metric_msg)
+            print(len(metric_msg) * "-")
+        return self
+
+    def __str__(self):
+        model_str = ""
+        model_str += ("Coder model : " + str(self.coder) + "\n")
+        model_str += ("Decoder model : " + str(self.decoder) + "\n")
         return model_str
