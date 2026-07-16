@@ -1,16 +1,18 @@
 from copy import copy
 from collections import defaultdict
-try:
+"""try:
     import cupy as np
 except:
-    import numpy as np
+"""
+import numpy as np
 import math
 
+EPS = 10e-10
 
 class Matrix:
 
-    value: np.ndarray[np.float64]
-    grad_: np.ndarray[np.float64]
+    value: np.ndarray
+    grad_: np.ndarray
     local_gradients_: list
     require_grad: bool
     shape: tuple
@@ -29,24 +31,42 @@ class Matrix:
         self.shape = self.value.shape
         self.ndim = self.value.ndim
         self.require_grad = require_grad
-
+            
     @staticmethod
     def _broadcast_gradient(grad, target_shape):
         if grad.shape == target_shape:
             return grad
+        if grad.ndim == 0:
+            return np.full(target_shape, grad)
 
-        while grad.ndim < len(target_shape):
-            grad = np.expand_dims(grad, axis=0)
+        if grad.ndim > len(target_shape):
+            grad_squeezed = grad.squeeze()
+            if grad_squeezed.shape == target_shape:
+                return grad_squeezed
+            axes_to_sum = tuple(range(len(target_shape), grad.ndim))
+            if axes_to_sum:
+                grad = np.sum(grad, axis=axes_to_sum)
+            if grad.shape == target_shape:
+                return grad
+            try:
+                return np.broadcast_to(grad, target_shape)
+            except ValueError:
+                pass
 
-        sum_axes = []
-        for axis, (g_dim, t_dim) in enumerate(zip(grad.shape, target_shape)):
-            if g_dim == 1 and t_dim > 1:
-                sum_axes.append(axis)
-            elif g_dim != t_dim:
-                raise ValueError(f"Wrong shapes: grad.shape={grad.shape}, target_shape={target_shape}")
-        if sum_axes:
-            grad = np.sum(grad, axis=tuple(sum_axes), keepdims=True)
-        return np.broadcast_to(grad, target_shape)
+        try:
+            return np.broadcast_to(grad, target_shape)
+        except ValueError:
+            while grad.ndim < len(target_shape):
+                grad = np.expand_dims(grad, axis=0)
+            sum_axes = []
+            for axis, (g_dim, t_dim) in enumerate(zip(grad.shape, target_shape)):
+                if g_dim > 1 and t_dim == 1:
+                    sum_axes.append(axis)
+                elif g_dim != t_dim:
+                    raise ValueError(f"Wrong shapes: grad.shape={grad.shape}, target_shape={target_shape}")
+            if sum_axes:
+                grad = np.sum(grad, axis=tuple(sum_axes), keepdims=True)
+            return np.broadcast_to(grad, target_shape)
 
     def __add__(self, other):
         if not isinstance(other, Matrix):
@@ -296,101 +316,133 @@ class Matrix:
         full_shape.insert(axis, len(stack_list))
         new_shape = list(stack_list[0].shape)
         new_shape.insert(axis, 1)
-        stacked = Matrix.zeros(shape=full_shape)
-        for i in range(len(stack_list)):
+        new_value = np.zeros(shape=full_shape)
 
+        new_local_gradients = []
+        new_require_grad = False
+        for i in range(len(stack_list)):
+            obj_val = stack_list[i].value
             slices = []
             for j in range(stack_list[0].ndim):
                 slices.append(slice(None))
             slices.insert(axis, slice(i, i + 1, None))
 
-            stacked[tuple(slices)] = stack_list[i].reshape(shape=new_shape)
-        return stacked
+            new_value[tuple(slices)] = obj_val.reshape(new_shape)
+
+            if (stack_list[i].require_grad):
+                def grad_self(grad, obj_val = obj_val, slices = tuple(slices)):
+                    new_grad = grad[slices]
+                    return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+
+                new_require_grad = True
+                new_local_gradients.append((stack_list[i], grad_self, 'stack'))
+
+        return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def sin(cls, obj):
-        new_value = np.sin(obj.value)
+        obj_val = obj.value
+        new_value = np.sin(obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x * np.cos(obj.value), 'sin'))
+            def grad_obj(grad, obj_val=obj_val):
+                new_grad = grad * np.cos(obj_val)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'sin'))
+
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def cos(cls, obj):
-        new_value = np.cos(obj.value)
+        obj_val = obj.value
+        new_value = np.cos(obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: -x * np.sin(obj.value), 'cos'))
+            def grad_obj(grad, obj_val=obj_val):
+                new_grad = -grad * np.sin(obj_val)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'cos'))
+
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def exp(cls, obj):
-        new_value = np.exp(obj.value)
+        obj_val = obj.value
+        new_value = np.exp(obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x * new_value, 'exp'))
+            def grad_obj(grad, obj_val=obj_val):
+                new_grad = grad * np.exp(obj_val)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'exp'))
+
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def log(cls, obj):
-        new_value = np.log(obj.value)
+        obj_val = obj.value
+        new_value = np.log(obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x / obj.value, 'log'))
+            def grad_obj(grad, obj_val=obj_val):
+                new_grad = grad / obj_val
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'log'))
+
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def sqrt(cls, obj):
+        obj_val = obj.value
         new_value = np.sqrt(obj.value)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x / (2 * new_value + 10e-5), 'sqrt'))
+            def grad_obj(grad, obj_val=obj_val):
+                new_grad = grad / (2 * np.sqrt(obj_val) + EPS)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'sqrt'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def sum(cls, obj, axis=None, keepdims=False):
-        if not keepdims:
-            if axis is not None:
-                new_value = np.sum(obj.value, axis=axis)
-                new_local_gradients = []
-                new_require_grad = obj.require_grad
+        obj_val = obj.value
+        new_value = np.sum(obj_val, axis=axis, keepdims=keepdims)
+        new_local_gradients = []
+        new_require_grad = obj.require_grad
 
-                if obj.require_grad:
-                    new_local_gradients.append(
-                        (obj, lambda x: np.expand_dims(np.array(x), axis=axis) * np.ones_like(obj.value), 'sum')
-                    )
-                return Matrix(new_value, new_local_gradients, new_require_grad)
-
+        if obj.require_grad:
+            if keepdims:
+                def grad_obj(grad, obj_val=obj_val):
+                    return Matrix._broadcast_gradient(grad, obj_val.shape)
+                
             else:
-                new_value = np.sum(obj.value, axis=axis)
-                new_local_gradients = []
-                new_require_grad = obj.require_grad
+                def grad_obj(grad, obj_val=obj_val, axis=axis):
+                    if axis is None:
+                        return  grad * np.ones_like(obj_val)
+                    else:
+                        if isinstance(axis, int):
+                            axis = (axis,)
+                        for ax in sorted(axis):
+                            grad = np.expand_dims(grad, axis=ax)
+                        return np.broadcast_to(grad, obj_val.shape)
+                    
+            new_local_gradients.append((obj, grad_obj, 'sum'))
 
-                if obj.require_grad:
-                    new_local_gradients.append(
-                        (obj, lambda x: x * np.ones_like(obj.value), 'sum')
-                    )
-                return Matrix(new_value, new_local_gradients, new_require_grad)
-
-        else:
-            new_value = np.sum(obj.value, axis=axis, keepdims=True) * np.ones_like(obj.value)
-            new_local_gradients = []
-            new_require_grad = obj.require_grad
-
-            if obj.require_grad:
-                new_local_gradients.append(
-                    (obj, lambda x: x, 'sum')
-                )
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
@@ -403,79 +455,122 @@ class Matrix:
 
     @classmethod
     def std(cls, obj, axis=None, keepdims=False):
-        mean = Matrix.mean(obj, axis=axis, keepdims=keepdims)
+        # Всегда используем keepdims=True для промежуточных операций
+        mean = Matrix.mean(obj, axis=axis, keepdims=True)
         sub = obj - mean
         square_sub = sub ** 2
-        sum_square = Matrix.mean(square_sub, axis=axis, keepdims=keepdims)
+        sum_square = Matrix.mean(square_sub, axis=axis, keepdims=True)
         std = Matrix.sqrt(sum_square)
+        
+        if not keepdims and axis is not None:
+            # Убираем оси, по которым усредняли
+            axes = axis if isinstance(axis, (tuple, list)) else (axis,)
+            new_shape = list(std.shape)
+            for ax in sorted(axes, reverse=True):
+                del new_shape[ax]
+            std = std.reshape(new_shape)
+        
         return std
 
     @classmethod
     def sigmoid(cls, obj):
+        obj_val = obj.value
         new_value = 1 / (1 + np.exp(-1 * obj.value))
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x * new_value * (1 - new_value), 'sigmoid'))
+            def grad_obj(grad, obj_val = obj_val, new_val=new_value):
+                new_grad = grad * new_val * (1 - new_val)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'sigmoid'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def sign(cls, obj):
-        new_value = np.sign(obj.value)
+        obj_val = obj.value
+        new_value = np.sign(obj_val)
+        new_local_gradients = []
         new_require_grad = obj.require_grad
+
+        if obj.require_grad:
+            def grad_obj(grad, obj_val = obj_val):
+                new_grad = np.zeros((obj_val.shape))
+                return new_grad
+            
+            new_local_gradients.append((obj, grad_obj, 'sign'))
+            
         return Matrix(new_value, require_grad=new_require_grad)
 
     @classmethod
     def relu(cls, obj):
+        obj_val = obj.value
         zeros = np.zeros(obj.shape)
-        new_value = np.maximum(zeros, obj.value)
+        new_value = np.maximum(zeros, obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x * np.sign(new_value), 'relu'))
+            def grad_obj(grad, obj_val = obj_val, new_val=new_value):
+                new_grad = grad * np.sign(new_val)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'relu'))
+
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def lrelu(cls, obj, alpha):
-        new_value = np.maximum(alpha * obj.value, obj.value)
+        obj_val = obj.value
+        new_value = np.maximum(alpha * obj_val, obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            sign = np.sign(new_value)
-            sign[sign == 0] = alpha
-            new_local_gradients.append((obj, lambda x: x * sign, 'lrelu'))
+            def grad_obj(grad, obj_val = obj_val, new_val=new_value):
+                sign = np.sign(new_val)
+                sign[sign == 0] = alpha
+                new_grad = grad * sign
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'lrelu'))
+
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def tanh(cls, obj):
-        new_value = np.tanh(obj.value)
+        obj_val = obj.value
+        new_value = np.tanh(obj_val)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: x * (1 + new_value) * (1 - new_value), 'tanh'))
+            def grad_obj(grad, obj_val = obj_val, new_val=new_value):
+                new_grad = grad * (1 + new_val) * (1 - new_val)
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'tanh'))
+            
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
     def softmax(cls, obj, axis=-1):
-
-        def compute_gradient(grad):
-            prime = np.zeros(obj.shape)
-            for i in range(obj.shape[0]):
-                s = np.array([new_value[i]])
-                g = np.array([grad[i]])
-                prime[i] = -s * np.sum(s * g, axis=1) + s * g
-            return prime
-
-        new_value = np.exp(obj.value) / np.sum(np.exp(obj.value), axis=axis, keepdims=True)
+        obj_val = obj.value
+        new_value = np.exp(obj_val) / np.sum(np.exp(obj_val), axis=axis, keepdims=True)
         new_local_gradients = []
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            new_local_gradients.append((obj, lambda x: compute_gradient(x), 'softmax'))
+            def grad_obj(grad, obj_val = obj_val, new_val=new_value):
+                new_grad = np.zeros(obj_val.shape)
+                for i in range(obj_val.shape[0]):
+                    s = np.array([new_val[i]])
+                    g = np.array([grad[i]])
+                    new_grad[i] = -s * np.sum(s * g, axis=1) + s * g
+                return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+            
+            new_local_gradients.append((obj, grad_obj, 'softmax'))
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     @classmethod
@@ -533,34 +628,43 @@ class Matrix:
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     def backward(self, verbose=False):
-
-        gradients = defaultdict(lambda: 0)
-
-        def compute_gradients(matrix, before_grads):
-            if matrix.local_gradients:
-                for (child, child_gradients_func, operation) in matrix.local_gradients:
-                    if verbose:
-                        print(f"{child} - {child_gradients_func} - {operation}")
-                    new_child_grad = child_gradients_func(before_grads)
-                    compute_gradients(child, new_child_grad)
-                    gradients[child] += new_child_grad
-
-        compute_gradients(self, np.ones(self.shape))
-
-        return gradients
+        self.grad_ = np.ones_like(self.value)
+        stack = [(self, np.ones_like(self.value))]
+        while stack:
+            node, current_grad = stack.pop()
+            grad_accum = {}  # parent -> суммарный градиент от текущего узла
+            for parent, grad_fn, operation in node.local_gradients_:
+                if verbose:
+                    print(f"Calculate {operation} gradient for {parent} from {node} ...")
+                parent_grad = grad_fn(current_grad)
+                if parent in grad_accum:
+                    grad_accum[parent] += parent_grad
+                else:
+                    grad_accum[parent] = parent_grad
+            for parent, parent_grad in grad_accum.items():
+                if parent.grad_ is None:
+                    parent.grad_ = parent_grad
+                else:
+                    parent.grad_ += parent_grad
+                if verbose:
+                    print(f"Gradient is {parent_grad}")
+                    print(f"Pushing ({parent}, {parent_grad}) to stack")
+                stack.append((parent, parent_grad))
+        return
 
     def __getitem__(self, idx):
-        def compute_gradient(grad, target):
-            target_grad = np.zeros((target.shape))
-            target_grad[idx] = grad
-            return target_grad
-
+        self_val = self.value
         new_value = self.value[idx]
         new_local_gradients = []
         new_require_grad = self.require_grad
 
         if self.require_grad:
-            new_local_gradients.append((self, lambda x: compute_gradient(x, self), 'getitem'))
+            def grad_self(grad, self_val = self_val, idx = idx):
+                new_grad = np.zeros((self_val.shape))
+                new_grad[idx] = grad
+                return new_grad
+            
+            new_local_gradients.append((self, grad_self, 'getitem'))
 
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
@@ -568,13 +672,9 @@ class Matrix:
         if isinstance(item, Matrix):
             self.value[key] = item.value
             if item.require_grad:
-                self.require_grad = True
-                if self.value[key].ndim == self.value.ndim:
-                    self.local_gradients.append((item, lambda x: x[key], 'setitem'))
-                else:
-                    self.local_gradients.append((item, lambda x: x[key].reshape(1, -1), 'setitem'))
+                raise AttributeError("No gradient operation is allowed")
         else:
-            self.value = np.array(item)
+            self.value[key] = np.array(item)
         return
 
     def __repr__(self):

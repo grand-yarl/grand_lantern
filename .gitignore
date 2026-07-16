@@ -1,6 +1,9 @@
 dist/
+tests/
 .idea/
 .venv/
 **/__pycache__/
 build/
 grandlantern.egg-info/
+grandlantern_venv/
+.vscode/
