@@ -1,7 +1,10 @@
+"""
 try:
     import cupy as np
 except:
     import numpy as np
+"""
+import numpy as np
 import math
 from grandlantern.matrix.Matrix import Matrix
 from .Activation import ActivationFunction, Linear, Sigmoid, Tanh
@@ -84,39 +87,35 @@ class BatchNormLayer(Layer):
     running_mean: np.ndarray
     running_std: np.ndarray
 
-    def __init__(self, momentum = 0.9):
+    def __init__(self, momentum=0.9):
         super().__init__()
+        self.momentum = momentum
         self.gamma = None
         self.beta = None
         self.running_mean = None
-        self.running_std = None
-        self.momentum = momentum
-        return
+        self.running_var = None
 
-    def initialize_weights(self, n_inputs):
-        self.gamma = Matrix.ones(shape=(n_inputs), require_grad=True)
-        self.beta = Matrix.zeros(shape=(n_inputs), require_grad=True)
-        self.running_mean = np.ones(shape=(n_inputs))
-        self.running_std = np.zeros(shape=(n_inputs))
+    def initialize_weights(self, n_features):
+        self.gamma = Matrix.ones((n_features,), require_grad=True)
+        self.beta = Matrix.zeros((n_features,), require_grad=True)
+        self.running_mean = np.zeros(n_features)
+        self.running_var = np.ones(n_features)
         self.parameters = [self.gamma, self.beta]
-        return
 
     def forward(self, X, train_mode):
-        if (self.gamma is None) or (self.beta is None):
-            self.initialize_weights(X.shape[1:])
+        if self.gamma is None:
+            self.initialize_weights(X.shape[1])
 
-        if (train_mode):
+        if train_mode:
             mean = Matrix.mean(X, axis=0, keepdims=True)
-            std = Matrix.std(X, axis=0, keepdims=True)
-
-            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean.value
-            self.running_std = self.momentum * self.running_std + (1 - self.momentum) * std.value
+            var = Matrix.mean((X - mean) ** 2, axis=0, keepdims=True)
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean.value.squeeze()
+            self.running_var = self.momentum * self.running_var + (1 - self.momentum) * var.value.squeeze()
         else:
-            mean = Matrix(self.running_mean)
-            std = Matrix(self.running_var)
+            mean = Matrix(self.running_mean.reshape(1, -1))
+            var = Matrix(self.running_var.reshape(1, -1))
 
-        X_normed = (X - mean) / (std ** 2 + EPS)
-
+        X_normed = (X - mean) / (var + EPS) ** 0.5
         return X_normed * self.gamma + self.beta
 
     def __str__(self):
@@ -228,9 +227,10 @@ class RecursiveLayer(Layer):
             self.initialize_weights(X.shape[2])
         if self.h0 is None:
             self.h0 = Matrix.zeros(shape=(self.n_neurons), require_grad=self.train_init)
+            if self.train_init:
+                self.parameters += [self.h0]
 
-        h0 = Matrix.stack([self.h0 for i in range(X.shape[0])])
-        h = [h0]
+        h = [self.h0]
 
         for i in range(X.shape[1]):
             if self.biased:
@@ -270,12 +270,14 @@ class LSTMLayer(Layer):
     bias_o: Matrix
 
     biased: bool
+    train_init: bool
 
-    def __init__(self, n_neurons, biased=False, regularizer=BaseRegularizer()):
+    def __init__(self, n_neurons, biased=False, train_init = False, regularizer=BaseRegularizer()):
         super().__init__()
         self.n_neurons = n_neurons
         self.regularizer = regularizer
         self.biased = biased
+        self.train_init = train_init
 
         self.Wfx = None
         self.Wfh = None
@@ -317,7 +319,9 @@ class LSTMLayer(Layer):
         if self.Wfx is None:
             self.initialize_weights(X.shape[2])
         if self.h0 is None:
-            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=True)
+            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=self.train_init)
+            if self.train_init:
+                self.parameters += [self.h0]
 
         c0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons))
         h = [self.h0]
@@ -368,11 +372,14 @@ class GRULayer(Layer):
     Whh: Matrix
     bias_h: Matrix
 
-    def __init__(self, n_neurons, biased=False, regularizer=BaseRegularizer()):
+    
+
+    def __init__(self, n_neurons, biased=False, train_init=False, regularizer=BaseRegularizer()):
         super().__init__()
         self.n_neurons = n_neurons
         self.regularizer = regularizer
         self.biased = biased
+        self.train_init = train_init
 
         self.Wzx = None
         self.Wzh = None
@@ -408,7 +415,9 @@ class GRULayer(Layer):
         if self.Wzx is None:
             self.initialize_weights(X.shape[2])
         if self.h0 is None:
-            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=True)
+            self.h0 = Matrix.zeros(shape=(X.shape[0], self.n_neurons), require_grad=self.train_init)
+            if self.train_init:
+                self.parameters += [self.h0]
 
         h = [self.h0]
 
@@ -480,20 +489,20 @@ class EmbeddingLayer(Layer):
     def __init__(self, emb_num, emb_dim):
         super().__init__()
 
-        self.Emb = []
-        for i in range(emb_num):
-            self.Emb.append(Matrix.uniform(low=-1, high=1, shape=(emb_dim), require_grad=True))
+        self.Emb = [Matrix.uniform(low=-1, high=1, shape=(emb_dim), require_grad=True) for i in range(emb_num)]
+        self.parameters = self.Emb
 
         self.emb_num = emb_num
         self.emb_dim = emb_dim
         return
 
     def forward(self, X, train_mode):
-        emb_list = []
-        for index in X:
-            emb_list.append(self.Emb[index])
-        embeddings = Matrix.stack(emb_list)
-        self.parameters = emb_list
+        indices = X.value.astype(int) 
+        flat_indices = indices.flatten()
+        emb_list = [self.Emb[idx] for idx in flat_indices]
+        embeddings = Matrix.stack(emb_list, axis=0)
+        new_shape = list(indices.shape) + [self.emb_dim]
+        embeddings = embeddings.reshape(new_shape)
         return embeddings
 
     def __str__(self):

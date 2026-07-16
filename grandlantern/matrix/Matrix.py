@@ -35,38 +35,44 @@ class Matrix:
     @staticmethod
     def _broadcast_gradient(grad, target_shape):
         if grad.shape == target_shape:
-            return grad
+            return grad.copy()
         if grad.ndim == 0:
             return np.full(target_shape, grad)
 
-        if grad.ndim > len(target_shape):
-            grad_squeezed = grad.squeeze()
-            if grad_squeezed.shape == target_shape:
-                return grad_squeezed
-            axes_to_sum = tuple(range(len(target_shape), grad.ndim))
-            if axes_to_sum:
-                grad = np.sum(grad, axis=axes_to_sum)
-            if grad.shape == target_shape:
-                return grad
-            try:
-                return np.broadcast_to(grad, target_shape)
-            except ValueError:
-                pass
+        # Удаляем все оси размерности 1 (squeeze)
+        grad = grad.squeeze()
+        if grad.shape == target_shape:
+            return grad.copy()
 
+        # Если осей больше, чем нужно, суммируем по первым лишним (слева)
+        if grad.ndim > len(target_shape):
+            axes_to_sum = tuple(range(grad.ndim - len(target_shape)))
+            grad = np.sum(grad, axis=axes_to_sum)
+            if grad.shape == target_shape:
+                return grad.copy()
+
+        # Если осей меньше, добавляем оси СПРАВА (в конец)
+        while grad.ndim < len(target_shape):
+            grad = np.expand_dims(grad, axis=-1)
+
+        # Пытаемся применить broadcasting
         try:
-            return np.broadcast_to(grad, target_shape)
+            return np.broadcast_to(grad, target_shape).copy()
         except ValueError:
-            while grad.ndim < len(target_shape):
-                grad = np.expand_dims(grad, axis=0)
+            # Если broadcast не удался, суммируем по осям, где grad > 1, target == 1
             sum_axes = []
             for axis, (g_dim, t_dim) in enumerate(zip(grad.shape, target_shape)):
-                if g_dim > 1 and t_dim == 1:
+                if g_dim == t_dim:
+                    continue
+                elif g_dim > 1 and t_dim == 1:
                     sum_axes.append(axis)
-                elif g_dim != t_dim:
+                elif g_dim == 1 and t_dim > 1:
+                    continue
+                else:
                     raise ValueError(f"Wrong shapes: grad.shape={grad.shape}, target_shape={target_shape}")
             if sum_axes:
                 grad = np.sum(grad, axis=tuple(sum_axes), keepdims=True)
-            return np.broadcast_to(grad, target_shape)
+            return np.broadcast_to(grad, target_shape).copy()
 
     def __add__(self, other):
         if not isinstance(other, Matrix):
@@ -211,15 +217,21 @@ class Matrix:
         new_require_grad = self.require_grad or other.require_grad
 
         if self.require_grad:
-            def grad_self(grad, self_val = self_val, other_val = other_val):
-                new_grad = grad @ np.moveaxis(other_val, -1, -2)
+            def grad_self(grad, self_val=self_val, other_val=other_val):
+                if self_val.ndim == 1:
+                    new_grad = grad @ other_val.T
+                else:
+                    new_grad = grad @ np.moveaxis(other_val, -1, -2)
                 return Matrix._broadcast_gradient(new_grad, self_val.shape)
             
             new_local_gradients.append((self, grad_self, 'matmul'))
 
         if other.require_grad:
-            def grad_other(grad, self_val = self_val, other_val = other_val):
-                new_grad = np.moveaxis(self_val, -1, -2) @ grad
+            def grad_other(grad, self_val=self_val, other_val=other_val):
+                if self_val.ndim == 1:
+                    new_grad = np.outer(self_val, grad)
+                else:
+                    new_grad = np.moveaxis(self_val, -1, -2) @ grad
                 return Matrix._broadcast_gradient(new_grad, other_val.shape)
             
             new_local_gradients.append((other, grad_other, 'matmul'))
@@ -322,16 +334,18 @@ class Matrix:
         new_require_grad = False
         for i in range(len(stack_list)):
             obj_val = stack_list[i].value
+
             slices = []
             for j in range(stack_list[0].ndim):
                 slices.append(slice(None))
             slices.insert(axis, slice(i, i + 1, None))
+            tuple_slices = tuple(slices)
 
-            new_value[tuple(slices)] = obj_val.reshape(new_shape)
+            new_value[tuple_slices] = obj_val.reshape(new_shape)
 
             if (stack_list[i].require_grad):
-                def grad_self(grad, obj_val = obj_val, slices = tuple(slices)):
-                    new_grad = grad[slices]
+                def grad_self(grad, obj_val = obj_val, tuple_slices=tuple_slices):
+                    new_grad = grad[tuple_slices]
                     return Matrix._broadcast_gradient(new_grad, obj_val.shape)
 
                 new_require_grad = True
@@ -645,7 +659,7 @@ class Matrix:
                 if parent.grad_ is None:
                     parent.grad_ = parent_grad
                 else:
-                    parent.grad_ += parent_grad
+                    parent.grad_ = parent.grad_ + parent_grad
                 if verbose:
                     print(f"Gradient is {parent_grad}")
                     print(f"Pushing ({parent}, {parent_grad}) to stack")

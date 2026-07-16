@@ -12,14 +12,8 @@ class DatasetIterator:
     def __init__(self, dataset, batch_size, shuffle=True):
         self.dataset = dataset
         self.batch_size = batch_size
-        self.n_batches = 0
         self.shuffle = shuffle
-
-    def __copy__(self):
-        cls = self.__class__
-        new_dataset = copy(self.dataset)
-        new_iterator = cls(new_dataset, batch_size=self.batch_size)
-        return new_iterator
+        self.n_batches = 0
 
     def fill(self, X, y):
         self.dataset.fill(X, y)
@@ -27,16 +21,17 @@ class DatasetIterator:
         return self
 
     def batch(self, iteration):
-        if iteration == self.n_batches:
-            batch_slice = slice(iteration * self.batch_size, len(self.dataset))
-        else:
-            batch_slice = slice(iteration * self.batch_size, (iteration + 1) * self.batch_size)
-        X_batch, y_batch = self.dataset[batch_slice]
-        return X_batch, y_batch
+        start = iteration * self.batch_size
+        end = min((iteration + 1) * self.batch_size, len(self.dataset))
+        return self.dataset[start:end]
 
     def __call__(self):
         if self.shuffle:
             self.dataset.shuffle()
         for it in range(self.n_batches):
-            X_batch, y_batch = self.batch(it)
-            yield X_batch, y_batch
+            yield self.batch(it)
+
+    def __copy__(self):
+        new_dataset = copy(self.dataset)
+        new_iterator = self.__class__(new_dataset, self.batch_size, self.shuffle)
+        return new_iterator
