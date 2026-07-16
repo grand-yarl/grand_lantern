@@ -7,6 +7,7 @@ from grandlantern.matrix.Matrix import Matrix
 from .Activation import ActivationFunction, Linear, Sigmoid, Tanh
 from .Regularizers import BaseRegularizer
 
+EPS = 10e-5
 
 class Layer:
     parameters: list
@@ -80,16 +81,23 @@ class LinearLayer(Layer):
 class BatchNormLayer(Layer):
     gamma: Matrix
     beta: Matrix
+    running_mean: np.ndarray
+    running_std: np.ndarray
 
-    def __init__(self):
+    def __init__(self, momentum = 0.9):
         super().__init__()
         self.gamma = None
         self.beta = None
+        self.running_mean = None
+        self.running_std = None
+        self.momentum = momentum
         return
 
     def initialize_weights(self, n_inputs):
         self.gamma = Matrix.ones(shape=(n_inputs), require_grad=True)
         self.beta = Matrix.zeros(shape=(n_inputs), require_grad=True)
+        self.running_mean = np.ones(shape=(n_inputs))
+        self.running_std = np.zeros(shape=(n_inputs))
         self.parameters = [self.gamma, self.beta]
         return
 
@@ -97,15 +105,22 @@ class BatchNormLayer(Layer):
         if (self.gamma is None) or (self.beta is None):
             self.initialize_weights(X.shape[1:])
 
-        mean = Matrix.mean(X, axis=0, keepdims=True)
-        std = Matrix.std(X, axis=0, keepdims=True)
+        if (train_mode):
+            mean = Matrix.mean(X, axis=0, keepdims=True)
+            std = Matrix.std(X, axis=0, keepdims=True)
 
-        X_normed = (X - mean) / (std ** 2 + 10e-5)
+            self.running_mean = self.momentum * self.running_mean + (1 - self.momentum) * mean.value
+            self.running_std = self.momentum * self.running_std + (1 - self.momentum) * std.value
+        else:
+            mean = Matrix(self.running_mean)
+            std = Matrix(self.running_var)
+
+        X_normed = (X - mean) / (std ** 2 + EPS)
 
         return X_normed * self.gamma + self.beta
 
     def __str__(self):
-        return f"Batch Norm Layer."
+        return f"Batch Norm Layer with momentum {self.momentum}."
 
 
 class DropOutLayer(Layer):
