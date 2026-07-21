@@ -1,4 +1,4 @@
-from copy import copy
+from copy import copy, deepcopy
 from collections import defaultdict
 """try:
     import cupy as np
@@ -324,6 +324,9 @@ class Matrix:
 
     @classmethod
     def stack(cls, stack_list, axis=0):
+        if not stack_list:
+            raise ValueError("concat_list cannot be empty")
+        
         full_shape = list(stack_list[0].shape)
         full_shape.insert(axis, len(stack_list))
         new_shape = list(stack_list[0].shape)
@@ -350,6 +353,42 @@ class Matrix:
 
                 new_require_grad = True
                 new_local_gradients.append((stack_list[i], grad_self, 'stack'))
+
+        return Matrix(new_value, new_local_gradients, new_require_grad)
+    
+    @classmethod
+    def concat(cls, concat_list, axis=-1):
+        if not concat_list:
+            raise ValueError("concat_list cannot be empty")
+
+        ndim = concat_list[0].ndim
+        if axis < 0:
+            axis = ndim + axis
+
+        for t in concat_list:
+            if t.ndim != ndim:
+                raise ValueError(f"All tensors must have same ndim: {ndim} vs {t.ndim}")
+            for ax in range(ndim):
+                if ax != axis and t.shape[ax] != concat_list[0].shape[ax]:
+                    raise ValueError(f"Incompatible shapes at axis {ax}: {t.shape} vs {concat_list[0].shape}")
+
+        values = [t.value for t in concat_list]
+        new_value = np.concatenate(values, axis=axis)
+
+        new_local_gradients = []
+        new_require_grad = False
+        start = 0
+        for t in concat_list:
+            if t.require_grad:
+                def grad_obj(grad, obj_val = t, axis=axis, start=start):
+                    slices = [slice(None)] * grad.ndim
+                    slices[axis] = slice(start, start + obj_val.shape[axis])
+                    new_grad = grad[tuple(slices)]
+                    return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+                
+                new_local_gradients.append((t, grad_obj, 'concat'))
+                new_require_grad = True
+            start += t.shape[axis]
 
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
