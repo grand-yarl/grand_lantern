@@ -1,62 +1,10 @@
+from copy import deepcopy
 import numpy as np
 from grandlantern.matrix import Matrix
 from grandlantern.layers import Layer
 from grandlantern.layers import ActivationFunction, Tanh, Sigmoid
 from grandlantern.layers import BaseRegularizer
 
-
-class RecursiveLayer(Layer):
-    cell_layer: Layer
-    h0: Matrix
-    return_last: bool
-    train_init: bool
-
-    def __init__(self, cell_layer: Layer, return_last=False, train_init=False):
-        super().__init__()
-        self.cell_layer = cell_layer
-        self.train_init = train_init
-        self.return_last = return_last 
-        self.h0 = None
-        self.n_neurons = cell_layer.n_neurons
-        return
-
-    def forward(self, X, train_mode):
-        if not self.cell_layer.parameters:
-            self.cell_layer.initialize_weights(X.shape[2])
-        self.parameters = self.cell_layer.get_parameters()
-
-        if self.h0 is None:
-            self.h0 = Matrix.zeros(shape=(self.n_neurons), require_grad=self.train_init)
-            if self.train_init:
-                self.parameters += [self.h0]
-
-        h0_batch = Matrix.stack([self.h0] * X.shape[0])
-        h = [h0_batch]
-
-        c = []
-        if isinstance(self.cell_layer, LSTMCell):
-            c0 = Matrix.zeros(shape=(self.n_neurons))
-            c0_batch = Matrix.stack([c0] * X.shape[0])
-            c = [c0_batch]
-
-        for i in range(X.shape[1]):
-            if isinstance(self.cell_layer, LSTMCell):
-                h_i, c_i = self.cell_layer.forward(X[:, i], h[i], c[i], train_mode)
-                h.append(h_i)
-                c.append(c_i)
-            else:
-                h_i = self.cell_layer.forward(X[:, i], h[i], train_mode)
-                h.append(h_i)
-        
-        if self.return_last:
-            return h[-1]
-        
-        H = Matrix.stack(h[1:], axis=1)
-        return H
-
-    def __str__(self):
-        return f"Recursive Layer with cell {self.cell}"
-    
 
 class RNNCell(Layer):
     Wx: Matrix
@@ -275,3 +223,84 @@ class GRUCell(Layer):
         return f"GRU cell with n_neurons {self.n_neurons}, " \
                f"biased {self.biased}, " \
                f"regularizer {self.regularizer}."
+
+
+class RecursiveLayer(Layer):
+    cell_layer: Layer
+    h0: Matrix
+    return_last: bool
+    train_init: bool
+
+    def __init__(self, cell_layer: Layer, return_last=False, train_init=False):
+        super().__init__()
+        self.cell_layer = cell_layer
+        self.train_init = train_init
+        self.return_last = return_last 
+        self.h0 = None
+        self.n_neurons = cell_layer.n_neurons
+        return
+
+    def forward(self, X, train_mode):
+        if not self.cell_layer.parameters:
+            self.cell_layer.initialize_weights(X.shape[2])
+        self.parameters = self.cell_layer.get_parameters()
+
+        if self.h0 is None:
+            self.h0 = Matrix.zeros(shape=(self.n_neurons), require_grad=self.train_init)
+            if self.train_init:
+                self.parameters += [self.h0]
+
+        h0_batch = Matrix.stack([self.h0] * X.shape[0])
+        h = [h0_batch]
+
+        c = []
+        if isinstance(self.cell_layer, LSTMCell):
+            c0 = Matrix.zeros(shape=(self.n_neurons))
+            c0_batch = Matrix.stack([c0] * X.shape[0])
+            c = [c0_batch]
+
+        for i in range(X.shape[1]):
+            if isinstance(self.cell_layer, LSTMCell):
+                h_i, c_i = self.cell_layer.forward(X[:, i], h[i], c[i], train_mode)
+                h.append(h_i)
+                c.append(c_i)
+            else:
+                h_i = self.cell_layer.forward(X[:, i], h[i], train_mode)
+                h.append(h_i)
+        
+        if self.return_last:
+            return h[-1]
+        
+        H = Matrix.stack(h[1:], axis=1)
+        return H
+
+    def __str__(self):
+        return f"Recursive Layer with cell {self.cell}"
+
+
+class BidirectionalRecursiveLayer(Layer):
+    cell_layer: Layer
+    train_init: bool
+    right_recursive: RecursiveLayer
+    left_recursive: RecursiveLayer
+
+    def __init__(self, cell_layer: Layer, train_init=False):
+        super().__init__()
+        self.cell_layer = cell_layer
+        self.train_init = train_init
+        self.right_recursive = RecursiveLayer(cell_layer=deepcopy(cell_layer), train_init=train_init)
+        self.left_recursive = RecursiveLayer(cell_layer=deepcopy(cell_layer), train_init=train_init)
+        return
+    
+    def forward(self, X, train_mode):
+        states_right = self.right_recursive.forward(X, train_mode)
+
+        X_reversed = X[:, ::-1, :]
+        states_left_reverced = self.left_recursive.forward(X_reversed, train_mode)
+        states_left = states_left_reverced[:, ::-1, :]
+
+        self.parameters = self.right_recursive.get_parameters() + self.left_recursive.get_parameters()
+        return Matrix.concat([states_right, states_left], axis=-1)
+    
+    def __str__(self):
+        return f"Bidirectional Recursive Layer with cell {self.cell}"
