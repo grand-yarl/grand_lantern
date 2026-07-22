@@ -4,8 +4,10 @@ from copy import copy
 
 
 class Dataset:
+    filled_: bool
 
     def __init__(self):
+        self.filled_ = False
         return
 
     def fill(self, X, y):
@@ -30,6 +32,7 @@ class TableDataset(Dataset):
             raise ValueError("X and y must have same number of samples")
         self.X = Matrix(X)
         self.y = Matrix(y)
+        self.filled_ = True
         return self
 
     def shuffle(self):
@@ -57,6 +60,7 @@ class ImageDataset(TableDataset):
             X = X.reshape(X.shape[0], X.shape[1], X.shape[2], 1)
         self.X = Matrix(X)
         self.y = Matrix(y)
+        self.filled_ = True
         return self
 
     def __len__(self):
@@ -84,4 +88,5 @@ class SequenceDataset(TableDataset):
             y_seq[i] = y_arr[i:i+self.seq_len]
         self.X = Matrix(X_seq)
         self.y = Matrix(y_seq)
+        self.filled_ = True
         return self
