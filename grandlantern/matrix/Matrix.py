@@ -615,20 +615,18 @@ class Matrix:
         new_require_grad = obj.require_grad
 
         if obj.require_grad:
-            def grad_obj(grad, obj_val = obj_val, new_val=new_value):
-                new_grad = np.zeros(obj_val.shape)
-                for i in range(obj_val.shape[0]):
-                    s = np.array([new_val[i]])
-                    g = np.array([grad[i]])
-                    new_grad[i] = -s * np.sum(s * g, axis=1) + s * g
+            def grad_obj(grad, obj_val = obj_val, new_val=new_value, axis=axis):
+                sum_grad_y = np.sum(grad * new_val, axis=axis, keepdims=True)
+                new_grad = new_val * (grad - sum_grad_y)
                 return Matrix._broadcast_gradient(new_grad, obj_val.shape)
             
             new_local_gradients.append((obj, grad_obj, 'softmax'))
+            
         return Matrix(new_value, new_local_gradients, new_require_grad)
-
+    
     @classmethod
     def safe_softmax(cls, obj, axis=-1):
-        sub = Matrix(obj.value.max(axis=1, keepdims=True))
+        sub = Matrix(np.max(obj.value, axis=axis, keepdims=True))
         return Matrix.softmax(obj - sub, axis=axis)
 
     @classmethod
