@@ -276,6 +276,29 @@ class EmbeddingLayer(Layer):
     def __str__(self):
         return f"Embedding Layer with number of embeddings {self.emb_num}, " \
                f"dimension {self.emb_dim}."
+    
+
+class CosSinPosEncoderLayer(Layer):
+    emb_dim: int
+
+    def __init__(self, emb_dim):
+        super().__init__()
+        self.emb_dim = emb_dim
+
+    def forward(self, X, train_mode):
+        seq_len = X.shape[1]
+        emb_dim = self.emb_dim
+
+        poses = np.arange(seq_len).reshape(-1, 1)
+        dims = np.arange(0, emb_dim, 2) / emb_dim
+
+        pos_codes = np.zeros((seq_len, emb_dim))
+        pos_codes[:, 0::2] = np.sin(poses / 10000 ** dims)
+        pos_codes[:, 1::2] = np.cos(poses / 10000 ** dims)
+        return Matrix(pos_codes)
+    
+    def __str__(self):
+        return f"CosSin Positional Encoder Layer with embedding dimension {self.emb_dim}."
 
 
 class FlattenLayer(Layer):
