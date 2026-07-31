@@ -11,6 +11,7 @@ from .activation.Activation import ActivationFunction, Linear, Sigmoid, Tanh
 from .regularizers.Regularizers import BaseRegularizer
 
 EPS = 1e-5
+NEG = -10e9
 
 class Layer:
     parameters: list
@@ -214,65 +215,6 @@ class Conv2DLayer(LinearLayer):
                f"dilation {self.dilation}, " \
                f"biased {self.biased}, " \
                f"activation {self.activation}, "  \
-               f"regularizer {self.regularizer}."
-
-
-class MultiHeadAttentionLayer(Layer):
-    Wq: Matrix
-    Wk: Matrix
-    Wv: Matrix
-    Wo: Matrix
-    n_neurons: int
-    n_heads: int
-
-    def __init__(self, n_neurons, n_heads, regularizer=BaseRegularizer()):
-        super().__init__()
-        self.n_neurons = n_neurons
-        self.n_heads = n_heads
-        self.regularizer = regularizer
-        self.Wq = None
-        self.Wk = None
-        self.Wv = None
-        self.Wo = None
-    
-    def initialize_weights(self, n_inputs):
-        k = np.sqrt(1 / n_inputs)
-        self.Wq = Matrix.uniform(low=-k, high=k, shape=(self.n_heads, n_inputs, self.n_neurons), require_grad=True)
-        self.Wk = Matrix.uniform(low=-k, high=k, shape=(self.n_heads, n_inputs, self.n_neurons), require_grad=True)
-        self.Wv = Matrix.uniform(low=-k, high=k, shape=(self.n_heads, n_inputs, self.n_neurons), require_grad=True)
-        self.Wo = Matrix.uniform(low=-k, high=k, shape=(self.n_heads * self.n_neurons, n_inputs), require_grad=True)
-
-        self.parameters = [self.Wq, self.Wk, self.Wv, self.Wo]
-        self.regularizer.define_params(self.parameters)
-        return
-    
-    def forward(self, XX, train_mode):
-        Xq = XX[0]
-        Xk = XX[1]
-        Xv = XX[2]
-
-        if Xq.shape[-1] != Xk.shape[-1] != Xv.shape[-1]:
-            raise ValueError("Q, K, V must have same feature dimension")
-        if self.Wq is None:
-            self.initialize_weights(Xq.shape[-1])
-        heads = []
-
-        for i in range(self.n_heads):
-            Q = Xq @ self.Wq[i]
-            K = Xk @ self.Wk[i]
-            V = Xv @ self.Wv[i]
-
-            logits = (Q @ K.transpose() / np.sqrt(self.n_neurons))
-            probas = Matrix.safe_softmax(logits, axis = -1)
-            Z = probas @ V
-            heads.append(Z)
-
-        Z_full = Matrix.concat(heads, axis = -1)
-        return Z_full @ self.Wo
-    
-    def __str__(self):
-        return f"MultiHead Attention Layer with n_neurons {self.n_neurons}, " \
-               f"n_heads {self.n_heads}, " \
                f"regularizer {self.regularizer}."
 
 

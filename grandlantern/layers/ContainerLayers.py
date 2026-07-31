@@ -12,11 +12,11 @@ class SequenceLayer(Layer):
         self.layers = layers
         return
 
-    def forward(self, X, train_mode):
+    def forward(self, X, train_mode, **kwargs):
         current = X
         self.parameters = []
         for layer in self.layers:
-            current = layer.forward(current, train_mode)
+            current = layer.forward(current, train_mode, **kwargs)
             self.parameters += layer.get_parameters()
         self.regularizer.define_params(self.parameters)
         return current
