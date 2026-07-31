@@ -10,7 +10,7 @@ from grandlantern.matrix.Matrix import Matrix
 from .activation.Activation import ActivationFunction, Linear, Sigmoid, Tanh
 from .regularizers.Regularizers import BaseRegularizer
 
-EPS = 10e-5
+EPS = 1e-5
 
 class Layer:
     parameters: list
@@ -120,6 +120,33 @@ class BatchNormLayer(Layer):
 
     def __str__(self):
         return f"Batch Norm Layer with momentum {self.momentum}."
+    
+
+class LayerNormLayer(Layer):
+    gamma: Matrix
+    beta: Matrix
+
+    def __init__(self):
+        super().__init__()
+        self.gamma = None
+        self.beta = None
+
+    def initialize_weights(self, n_features):
+        self.gamma = Matrix.ones((n_features,), require_grad=True)
+        self.beta = Matrix.zeros((n_features,), require_grad=True)
+        self.parameters = [self.gamma, self.beta]
+
+    def forward(self, X, train_mode):
+        if self.gamma is None:
+            self.initialize_weights(X.shape[-1])
+
+        mean = Matrix.mean(X, axis=-1, keepdims=True)
+        var = Matrix.mean((X - mean) ** 2, axis=-1, keepdims=True)
+        X_normed = (X - mean) / (var + EPS) ** 0.5
+        return X_normed * self.gamma + self.beta
+
+    def __str__(self):
+        return f"Layer Norm Layer."
 
 
 class DropOutLayer(Layer):
