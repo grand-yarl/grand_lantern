@@ -3,4 +3,4 @@ from .regularizers.Regularizers import BaseRegularizer, L1Regularizer, L2Regular
 from .Layers import Layer, LinearLayer, FlattenLayer, Conv2DLayer, BatchNormLayer, LayerNormLayer, DropOutLayer, EmbeddingLayer, CosSinPosEncoderLayer, ReshapeLayer
 from .RecursiveLayers import RecursiveLayer, BidirectionalRecursiveLayer, RNNCell, LSTMCell, GRUCell
 from .ContainerLayers import SequenceLayer, SkipConnectionLayer
-from .TransformerLayers import MultiHeadAttentionLayer, TransformerEncoderLayer, TransformerEncoderStack
+from .TransformerLayers import MultiHeadAttentionLayer, TransformerEncoderLayer, TransformerEncoderStack, TransformerDecoderLayer, TransformerDecoderStack
