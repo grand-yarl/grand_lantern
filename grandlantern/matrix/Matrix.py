@@ -522,8 +522,58 @@ class Matrix:
             for ax in sorted(axes, reverse=True):
                 del new_shape[ax]
             std = std.reshape(new_shape)
-        
+
         return std
+
+    @classmethod
+    def take_along_axis(cls, obj, idx, axis=-1):
+        obj_val = obj.value
+        idx_val = idx.value.astype(int) if isinstance(idx, Matrix) else np.array(idx).astype(int)
+        
+        ndim = obj_val.ndim
+        if axis < 0:
+            axis = ndim + axis
+
+        idx_val = np.expand_dims(idx_val, axis=axis)
+        new_value = np.squeeze(np.take_along_axis(obj_val, idx_val, axis), axis=axis)
+        new_local_gradients = []
+        new_require_grad = obj.require_grad
+
+        if obj.require_grad:
+            def grad_obj(grad, obj_val = obj_val, idx_val = idx_val, axis=axis):
+                new_grad = np.zeros(shape=obj_val.shape)
+                grad_exp = np.expand_dims(grad, axis)
+                np.put_along_axis(new_grad, idx_val, grad_exp, axis=axis)
+                return new_grad
+
+            new_local_gradients.append((obj, grad_obj, 'take_along_axis'))
+        return Matrix(new_value, new_local_gradients, new_require_grad)
+
+    @classmethod
+    def argmax(cls, obj, axis = None, keepdims = False):
+        return Matrix(np.argmax(obj.value, axis=axis, keepdims=keepdims), require_grad=False)
+    
+    @classmethod
+    def argmin(cls, obj, axis = None, keepdims = False):
+        return Matrix(np.argmin(obj.value, axis=axis, keepdims=keepdims), require_grad=False)
+
+    @classmethod
+    def max(cls, obj, axis = None):
+        raw_idx = Matrix.argmax(obj, axis=axis)
+        if axis is None:
+            idx = np.unravel_index(int(raw_idx.value), obj.value.shape)
+            return obj[idx]
+        else:
+            return Matrix.take_along_axis(obj, raw_idx, axis)
+    
+    @classmethod
+    def min(cls, obj, axis = None):
+        raw_idx = Matrix.argmin(obj, axis=axis)
+        if axis is None:
+            idx = np.unravel_index(int(raw_idx.value), obj.value.shape)
+            return obj[idx]
+        else:
+            return Matrix.take_along_axis(obj, raw_idx, axis)
 
     @classmethod
     def sigmoid(cls, obj):
