@@ -1,15 +1,14 @@
-try:
-    import cupy as np
-except:
-    import numpy as np
+import cupy as cp
+import numpy as np
 
 from copy import copy
 from grandlantern.matrix import Matrix
-from grandlantern.layers import Layer, EmbeddingLayer, CosSinPosEncoderLayer, TransformerEncoderStack, TransformerDecoderStack
+from grandlantern.layers import Layer, TransformerEncoderStack, TransformerDecoderStack
 from grandlantern.metrics import Metric, Loss
 from grandlantern.optimizers import Optimizer
 from grandlantern.dataiterators import DatasetIterator
 from grandlantern.layers import BaseRegularizer
+from grandlantern.generators import BaseGenerator
 from grandlantern.dataiterators import TOKEN_BOS, TOKEN_EOS
 
 
@@ -45,13 +44,9 @@ class SequenceModel():
         return
 
     def train_forward(self, X):
-        self.parameters = []
-        self.regularizators = []
         current_input = X
         for layer in self.layers:
             current_input = layer.forward(current_input, train_mode = True)
-            self.parameters += layer.get_parameters()
-            self.regularizators.append(layer.get_regularizer())
         return current_input
 
     def test_forward(self, X):
@@ -59,6 +54,13 @@ class SequenceModel():
         for layer in self.layers:
             current_input = layer.forward(current_input, train_mode = False)
         return current_input
+    
+    def collect_params_reguls(self):
+            self.parameters = []
+            self.regularizators = []
+            for layer in self.layers:
+                self.parameters += layer.get_parameters()
+                self.regularizators.append(layer.get_regularizer())
 
     def zero_grad(self):
         for parameter in self.parameters:
@@ -70,6 +72,7 @@ class SequenceModel():
         sum_metric_train = 0
 
         for (X_batch, y_batch) in dataset_iterator():
+            self.collect_params_reguls()
             self.zero_grad()
             y_pred = self.train_forward(X_batch)
 
@@ -157,84 +160,74 @@ class SequenceModel():
 
 
 class EncDecTransformerModel(SequenceModel):
-    src_emb_layer: EmbeddingLayer
-    tgt_emb_layer: EmbeddingLayer
-    pos_layer: CosSinPosEncoderLayer
+    src_vectorizer: Layer  # (src_shape) -> src_vectorizer -> (B, T, dim)
+    tgt_vectorizer: Layer  # (tgt_shape) -> tgt_vectorizer -> (B, T, dim)
     encoder: TransformerEncoderStack
     decoder: TransformerDecoderStack
-    out_layer: Layer
-    max_len: int
+    out_layer: Layer       # (B, T, dim) -> out_layer -> (out_shape)
+    generator: BaseGenerator
 
     def __init__(self, n_epochs, dataset_iterator, loss_function, metric_function, optimizer,
-                 src_emb_layer, tgt_emb_layer, pos_layer, encoder, decoder, out_layer, max_len = 1000):
+                 src_vectorizer, tgt_vectorizer, encoder, decoder, out_layer, generator):
         super().__init__(n_epochs, dataset_iterator, loss_function, metric_function, optimizer)
-        self.src_emb_layer = src_emb_layer
-        self.tgt_emb_layer = tgt_emb_layer
-        self.pos_layer = pos_layer
+        self.src_vectorizer = src_vectorizer
+        self.tgt_vectorizer = tgt_vectorizer
         self.encoder = encoder
         self.decoder = decoder
         self.out_layer = out_layer
-        self.max_len = max_len
+        self.generator = generator
         self.layers = [
-            self.src_emb_layer,
-            self.tgt_emb_layer,
-            self.pos_layer,
+            self.src_vectorizer,
+            self.tgt_vectorizer,
             self.encoder,
             self.decoder,
             self.out_layer
         ]
 
-    def train_forward(self, X, y, src_mask=None, tgt_mask=None, train_mode = True):
-        n_batches = X.shape[0]
+    def encode(self, X, src_mask=None, train_mode=True):
+         src_seq = self.src_vectorizer.forward(X, train_mode=train_mode)
+         context = self.encoder.forward(src_seq, train_mode=train_mode, mask=src_mask)
+         return context
 
-        src_emb = self.src_emb_layer.forward(X, train_mode=train_mode)
-        src_pos = self.pos_layer.forward(X, train_mode=train_mode)
-        src_emb_pos = src_emb + src_pos
+    def decode(self, y, H, src_mask=None, tgt_mask=None, train_mode=True):
+        tgt_seq = self.tgt_vectorizer.forward(y, train_mode=train_mode)
+        logits = self.decoder.forward((tgt_seq, H), train_mode=train_mode, self_mask=tgt_mask, cross_mask=src_mask)
+        output = self.out_layer.forward(logits, train_mode=train_mode)
+        return output
 
+    def decode_step(self, y, H, src_mask=None, tgt_mask=None, train_mode=True):
+        tgt_seq = self.tgt_vectorizer.forward(y, train_mode=train_mode)
+        logits = self.decoder.forward((tgt_seq, H), train_mode=train_mode, self_mask=tgt_mask, cross_mask=src_mask)
+        last_logits = logits[:, -1, :]
+        output = self.out_layer.forward(last_logits, train_mode=train_mode)
+        return output
+
+    def train_forward(self, X, y, src_mask=None, tgt_mask=None, train_mode=True):
+        # Shift
+        y_shift = self._shift_tgt_(y)
+
+        # Encode
+        context = self.encode(X, src_mask=src_mask, train_mode=train_mode)
+
+        # Decode
+        output = self.decode(y_shift, context, src_mask=src_mask, tgt_mask=tgt_mask, train_mode=train_mode)
+        return output
+
+    def _shift_tgt_(self, y):
+        n_batches = y.shape[0]
         begin = Matrix(np.full(shape=(n_batches, 1), fill_value=TOKEN_BOS), require_grad=False)
         y_shift = Matrix.concat([begin, y[:, :-1]], axis=1)
-        tgt_emb = self.tgt_emb_layer.forward(y_shift, train_mode=train_mode)
-        tgt_pos = self.pos_layer.forward(y_shift, train_mode=train_mode)
-        tgt_emb_pos = tgt_emb + tgt_pos
-
-        context = self.encoder.forward(src_emb_pos, train_mode=train_mode, mask=src_mask)
-        output = self.decoder.forward((tgt_emb_pos, context), train_mode=train_mode, self_mask=tgt_mask, cross_mask=src_mask)
-        probas = self.out_layer.forward(output)
-
-        self.parameters = []
-        self.regularizators = []
-        for layer in self.layers:
-            self.parameters += layer.get_parameters()
-            self.regularizators.append(layer.get_regularizer())
-        return probas
+        return y_shift
     
     def test_forward(self, X, src_mask=None):
-        n_batches = X.shape[0]
-
-        src_emb = self.src_emb_layer.forward(X, train_mode=False)
-        src_pos = self.pos_layer.forward(X, train_mode=False)
-        src_emb_pos = src_emb + src_pos
-        context = self.encoder.forward(src_emb_pos, train_mode=False, mask=src_mask)
-
-        y_pred = Matrix(np.full(shape=(n_batches, 1), fill_value=TOKEN_BOS), require_grad=False)
-        for i in range(self.max_len):
-            tgt_emb = self.tgt_emb_layer.forward(y_pred, train_mode=False)
-            tgt_pos = self.pos_layer.forward(y_pred, train_mode=False)
-            tgt_emb_pos = tgt_emb + tgt_pos
-            output = self.decoder.forward((tgt_emb_pos, context), train_mode=False, cross_mask=src_mask)
-            probas = self.out_layer.forward(output)
-            new_tokens = Matrix.argmax(probas[:, -1, :], axis=1).reshape((n_batches, 1))
-            y_pred = Matrix.concat([y_pred, new_tokens], axis=1)
-
-            if np.all(new_tokens.value == TOKEN_EOS):
-                break
-        return y_pred
+        return self.generator.generate(self, X, src_mask)
     
     def train(self, dataset_iterator):
         sum_loss_train = 0
         sum_metric_train = 0
     
         for (X_batch, X_mask, y_batch, y_mask) in dataset_iterator():
+            self.collect_params_reguls()
             self.zero_grad()
             y_pred = self.train_forward(X_batch, y_batch, X_mask, y_mask)
 
@@ -280,3 +273,8 @@ class EncDecTransformerModel(SequenceModel):
         metric_val = sum_metric_val / dataset_iterator.n_batches
     
         return loss_val, metric_val
+
+    def predict(self, X, src_mask=None):
+            X = Matrix(X)
+            y_pred = self.test_forward(X, src_mask).value
+            return y_pred
