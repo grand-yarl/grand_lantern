@@ -204,20 +204,27 @@ class EncDecTransformerModel(SequenceModel):
 
     def train_forward(self, X, y, src_mask=None, tgt_mask=None, train_mode=True):
         # Shift
-        y_shift = self._shift_tgt_(y)
+        y_shift, tgt_mask_shift = self._shift_tgt_(y, tgt_mask)
 
         # Encode
         context = self.encode(X, src_mask=src_mask, train_mode=train_mode)
 
         # Decode
-        output = self.decode(y_shift, context, src_mask=src_mask, tgt_mask=tgt_mask, train_mode=train_mode)
+        output = self.decode(y_shift, context, src_mask=src_mask, tgt_mask=tgt_mask_shift, train_mode=train_mode)
         return output
 
-    def _shift_tgt_(self, y):
+    def _shift_tgt_(self, y, tgt_mask):
         n_batches = y.shape[0]
         begin = Matrix(np.full(shape=(n_batches, 1), fill_value=TOKEN_BOS), require_grad=False)
         y_shift = Matrix.concat([begin, y[:, :-1]], axis=1)
-        return y_shift
+
+        if (tgt_mask is not None):
+            ones = Matrix.ones(shape=(n_batches, 1), require_grad=False)
+            tgt_mask_shift = Matrix.concat([ones, tgt_mask[:, :-1]], axis=1)
+        else:
+            tgt_mask_shift = tgt_mask
+        
+        return y_shift, tgt_mask_shift
     
     def test_forward(self, X, src_mask=None):
         return self.generator.generate(self, X, src_mask)

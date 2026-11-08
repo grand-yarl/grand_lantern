@@ -5,5 +5,5 @@ tests/
 **/__pycache__/
 build/
 grandlantern.egg-info/
-grandlantern_venv/
+**venv/
 .vscode/

@@ -25,7 +25,7 @@ class Matrix:
             self.value = array.value
             self.local_gradients_ = array.local_gradients
         else:
-            self.value = np.array(array)
+            self.value = np.array(array, dtype=np.float32)
             self.local_gradients_ = local_gradients
         self.grad_ = None
         self.shape = self.value.shape
@@ -39,40 +39,30 @@ class Matrix:
         if grad.ndim == 0:
             return np.full(target_shape, grad)
 
-        # Удаляем все оси размерности 1 (squeeze)
-        grad = grad.squeeze()
-        if grad.shape == target_shape:
-            return grad.copy()
+        # 1. Суммируем лишние ВЕДУЩИЕ оси
+        while grad.ndim > len(target_shape):
+            grad = grad.sum(axis=0)
 
-        # Если осей больше, чем нужно, суммируем по первым лишним (слева)
-        if grad.ndim > len(target_shape):
-            axes_to_sum = tuple(range(grad.ndim - len(target_shape)))
-            grad = np.sum(grad, axis=axes_to_sum)
-            if grad.shape == target_shape:
-                return grad.copy()
-
-        # Если осей меньше, добавляем оси СПРАВА (в конец)
+        # 2. Добавляем недостающие ВЕДУЩИЕ оси
         while grad.ndim < len(target_shape):
-            grad = np.expand_dims(grad, axis=-1)
+            grad = grad[np.newaxis, ...]
 
-        # Пытаемся применить broadcasting
-        try:
-            return np.broadcast_to(grad, target_shape).copy()
-        except ValueError:
-            # Если broadcast не удался, суммируем по осям, где grad > 1, target == 1
-            sum_axes = []
-            for axis, (g_dim, t_dim) in enumerate(zip(grad.shape, target_shape)):
-                if g_dim == t_dim:
-                    continue
-                elif g_dim > 1 and t_dim == 1:
-                    sum_axes.append(axis)
-                elif g_dim == 1 and t_dim > 1:
-                    continue
-                else:
-                    raise ValueError(f"Wrong shapes: grad.shape={grad.shape}, target_shape={target_shape}")
-            if sum_axes:
-                grad = np.sum(grad, axis=tuple(sum_axes), keepdims=True)
-            return np.broadcast_to(grad, target_shape).copy()
+        # 3. Суммируем по осям, где target=1, а grad>1
+        sum_axes = tuple(
+            i for i, (g, t) in enumerate(zip(grad.shape, target_shape))
+            if t == 1 and g > 1
+        )
+        if sum_axes:
+            grad = grad.sum(axis=sum_axes, keepdims=True)
+
+        # 4. Проверка совместимости (опционально, для раннего обнаружения багов)
+        for g, t in zip(grad.shape, target_shape):
+            if g != t and g != 1:
+                raise ValueError(
+                    f"Cannot broadcast grad {grad.shape} to {target_shape}"
+                )
+
+        return np.broadcast_to(grad, target_shape).copy()
 
     def __add__(self, other):
         if not isinstance(other, Matrix):
@@ -349,7 +339,7 @@ class Matrix:
             if (stack_list[i].require_grad):
                 def grad_self(grad, obj_val = obj_val, tuple_slices=tuple_slices):
                     new_grad = grad[tuple_slices]
-                    return Matrix._broadcast_gradient(new_grad, obj_val.shape)
+                    return new_grad.reshape(obj_val.shape)
 
                 new_require_grad = True
                 new_local_gradients.append((stack_list[i], grad_self, 'stack'))
@@ -729,28 +719,51 @@ class Matrix:
         return Matrix(new_value, new_local_gradients, new_require_grad)
 
     def backward(self, verbose=False):
-        self.grad_ = np.ones_like(self.value)
-        stack = [(self, np.ones_like(self.value))]
+        # --- Шаг 1: обойти граф, посчитать pending ---
+        id_to_obj = {}
+        pending = defaultdict(int)
+        visited = set()
+        stack = [self]
         while stack:
-            node, current_grad = stack.pop()
-            grad_accum = {}  # parent -> суммарный градиент от текущего узла
+            node = stack.pop()
+            if id(node) in visited:
+                continue
+            visited.add(id(node))
+            id_to_obj[id(node)] = node
+            for parent, _, _ in node.local_gradients_:
+                pending[id(parent)] += 1
+                if id(parent) not in visited:
+                    stack.append(parent)
+
+        # --- Шаг 2: инициализация ---
+        grads = {id(self): np.ones_like(self.value)}
+        self.grad_ = np.ones_like(self.value)
+        ready = [self]
+
+        # --- Шаг 3: топологический обход ---
+        while ready:
+            node = ready.pop()
+            current_grad = grads[id(node)]
+
             for parent, grad_fn, operation in node.local_gradients_:
                 if verbose:
-                    print(f"Calculate {operation} gradient for {parent} from {node} ...")
-                parent_grad = grad_fn(current_grad)
-                if parent in grad_accum:
-                    grad_accum[parent] += parent_grad
+                    print(f"Calculate {operation} gradient for {parent} from {node}")
+
+                pg = grad_fn(current_grad)
+                pid = id(parent)
+
+                if pid in grads:
+                    grads[pid] = grads[pid] + pg
                 else:
-                    grad_accum[parent] = parent_grad
-            for parent, parent_grad in grad_accum.items():
-                if parent.grad_ is None:
-                    parent.grad_ = parent_grad
-                else:
-                    parent.grad_ = parent.grad_ + parent_grad
-                if verbose:
-                    print(f"Gradient is {parent_grad}")
-                    print(f"Pushing ({parent}, {parent_grad}) to stack")
-                stack.append((parent, parent_grad))
+                    grads[pid] = pg
+
+                pending[pid] -= 1
+                if pending[pid] == 0:
+                    if parent.grad_ is None:
+                        parent.grad_ = grads[pid]
+                    else:
+                        parent.grad_ = parent.grad_ + grads[pid]
+                    ready.append(parent)
         return
 
     def __getitem__(self, idx):

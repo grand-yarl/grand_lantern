@@ -1,7 +1,9 @@
+"""
 try:
     import cupy as np
 except:
-    import numpy as np
+    """
+import numpy as np
 from grandlantern.matrix.Matrix import Matrix
 
 EPS = 10e-8

@@ -37,7 +37,7 @@ class BinaryCrossEntropy(Loss):
     def __call__(self, y_true, y_pred, mask=None):
         log_error = y_true * Matrix.log(y_pred + EPS) + (1 - y_true) * Matrix.log(1 - y_pred + EPS)
         if (self.use_mask) and (mask is not None):
-            n_real = Matrix.sum(mask)
+            n_real = np.sum(mask)
             return -1 * Matrix.sum(mask * log_error) / n_real
         return -1 * Matrix.mean(log_error)
 

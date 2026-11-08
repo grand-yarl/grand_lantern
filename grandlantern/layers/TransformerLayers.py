@@ -1,6 +1,6 @@
 import numpy as np
 from grandlantern.matrix import Matrix
-from grandlantern.layers import Layer, LinearLayer, LayerNormLayer, DropOutLayer, SequenceLayer, SkipConnectionLayer
+from grandlantern.layers import Layer, LinearLayer, LayerNormLayer, DropOutLayer, SequenceLayer
 from grandlantern.layers import Linear, ReLU
 from grandlantern.layers import BaseRegularizer
 
@@ -39,14 +39,29 @@ class MultiHeadAttentionLayer(Layer):
         self.parameters = [self.Wq, self.Wk, self.Wv, self.Wo]
         self.regularizer.define_params(self.parameters)
         return
+
+    def _reshape_mask_(self, mask, B, T_q, T_k):
+        mask_val = mask
+        if isinstance(mask, Matrix):
+            mask_val = mask.value
+
+        if mask_val.ndim == 1:                                          # (T_k,)        → (1,1,T_k)
+            mask_val = mask_val[None, None, :]
+        elif mask_val.ndim == 2:
+            if mask_val.shape[0] == B and mask_val.shape[1] == T_k:     # (B, T_k) → (B, 1, T_k)
+                mask_val = mask_val[:, None, :]
+            elif mask_val.shape == (T_q, T_k):                          # (T_q, T_k) → (1, T_q, T_k)
+                mask_val = mask_val[None, :, :]
+        mask_val = np.broadcast_to(mask_val, (B, T_q, T_k))
+        return Matrix(mask_val)
     
     def forward(self, XYZ, train_mode, mask=None):
         Xq = XYZ[0]
         Xk = XYZ[1]
         Xv = XYZ[2]
 
-        if (mask is not None) and (mask.ndim == 2):
-            mask = mask[:, np.newaxis, :]  
+        if mask is not None:
+            mask = self._reshape_mask_(mask, Xq.shape[0], Xq.shape[1], Xk.shape[1])          
         if self.Wq is None:
             self.initialize_weights(Xq.shape[-1], Xk.shape[-1], Xv.shape[-1])
         heads = []
@@ -58,7 +73,7 @@ class MultiHeadAttentionLayer(Layer):
 
             logits = (Q @ K.transpose() / np.sqrt(self.n_neurons))
             if mask is not None:
-                logits += (1 - mask) * NEG
+                logits = logits + (1 - mask) * NEG
             probas = Matrix.safe_softmax(logits, axis = -1)
             Z = probas @ V
             heads.append(Z)
@@ -202,9 +217,13 @@ class TransformerDecoderLayer(Layer):
         X = XH[0]
         H = XH[1]
 
-        causal_mask = np.stack(X.shape[0] * [np.tril(np.ones((X.shape[1], X.shape[1])))], axis=0)
+        n_batches, seq_len = X.shape[0], X.shape[1]
+
+        causal_mask = Matrix(np.stack(n_batches * [np.tril(np.ones((seq_len, seq_len)))], axis=0))
         if self_mask is not None:
-            causal_mask *= self_mask
+            if self_mask.shape != (n_batches, 1, seq_len):
+                self_mask = self_mask.reshape((n_batches, 1, seq_len))
+            causal_mask = causal_mask * self_mask
 
         X_norm1 = self.norm1.forward(X, train_mode=train_mode)
         X_attn1 = self.self_attention_layer.forward((X_norm1, X_norm1, X_norm1), train_mode=train_mode, mask=causal_mask)
