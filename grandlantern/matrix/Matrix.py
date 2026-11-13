@@ -1,13 +1,11 @@
+import math
 from copy import copy, deepcopy
 from collections import defaultdict
-"""try:
-    import cupy as np
-except:
-"""
-import numpy as np
-import math
+from grandlantern.backend import np
+
 
 EPS = 10e-10
+
 
 class Matrix:
 

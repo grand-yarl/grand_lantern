@@ -1,7 +1,5 @@
-import cupy as cp
-import numpy as np
-
 from copy import copy
+from grandlantern.backend import np
 from grandlantern.matrix import Matrix
 from grandlantern.layers import Layer, TransformerEncoderStack, TransformerDecoderStack
 from grandlantern.metrics import Metric, Loss

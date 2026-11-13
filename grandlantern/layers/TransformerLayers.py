@@ -1,4 +1,4 @@
-import numpy as np
+from grandlantern.backend import np
 from grandlantern.matrix import Matrix
 from grandlantern.layers import Layer, LinearLayer, LayerNormLayer, DropOutLayer, SequenceLayer
 from grandlantern.layers import Linear, ReLU

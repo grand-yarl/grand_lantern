@@ -1,4 +1,4 @@
-import numpy as np
+from grandlantern.backend import np
 from .Datasets import *
 from copy import copy
 

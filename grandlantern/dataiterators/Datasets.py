@@ -1,4 +1,4 @@
-import numpy as np
+from grandlantern.backend import np
 from grandlantern.matrix.Matrix import Matrix
 from copy import copy
 

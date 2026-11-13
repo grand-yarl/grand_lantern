@@ -1,4 +1,4 @@
-import numpy as np
+from grandlantern.backend import np
 from grandlantern.matrix import Matrix
 from grandlantern.dataiterators import TOKEN_BOS, TOKEN_EOS
 

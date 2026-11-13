@@ -1,11 +1,5 @@
-"""
-try:
-    import cupy as np
-except:
-    import numpy as np
-"""
-import numpy as np
 import math
+from grandlantern.backend import np
 from grandlantern.matrix.Matrix import Matrix
 from .activation.Activation import ActivationFunction, Linear, Sigmoid, Tanh
 from .regularizers.Regularizers import BaseRegularizer

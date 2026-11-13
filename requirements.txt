@@ -1,2 +1,2 @@
-numpy~=2.0.2
-cupy~=13.6.0
+numpy>=2.0.2
+cupy-cuda12x>=14.2.0
